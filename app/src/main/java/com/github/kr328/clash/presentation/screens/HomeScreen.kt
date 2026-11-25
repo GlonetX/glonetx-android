@@ -22,7 +22,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -272,22 +271,25 @@ private fun NetworkChartBackground(
     points: List<TrafficPoint>,
     modifier: Modifier = Modifier,
 ) {
-    val down = MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
-    val up = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.26f)
+    val down = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+    val up = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
     Canvas(modifier) {
         if (points.isEmpty()) return@Canvas
         val maximum = points.maxOf { maxOf(it.upload, it.download) }.coerceAtLeast(1)
-        fun line(selector: (TrafficPoint) -> Long, color: Color) {
+        fun area(selector: (TrafficPoint) -> Long, color: Color) {
             val path = Path()
             points.forEachIndexed { index, point ->
                 val x = index.toFloat() / (points.size - 1).coerceAtLeast(1) * size.width
                 val y = size.height - selector(point).toFloat() / maximum * size.height
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            drawPath(path, color, style = Stroke(2.dp.toPx()))
+            path.lineTo(size.width, size.height)
+            path.lineTo(0f, size.height)
+            path.close()
+            drawPath(path, color)
         }
-        line({ it.download }, down)
-        line({ it.upload }, up)
+        area({ it.download }, down)
+        area({ it.upload }, up)
     }
 }
 

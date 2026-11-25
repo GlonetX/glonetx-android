@@ -522,29 +522,40 @@ class MainActivity : ComponentActivity() {
                         TopBarSearchField(connectionQuery, { connectionQuery = it }, text("Host, process, rule…", "主机、进程、规则…"), Modifier.weight(1f))
                     }
                     "home" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("GlonetX", style = MaterialTheme.typography.titleLarge)
+                        Text("GlonetX", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.weight(1f))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Text("${bytes(home.download)}/s", style = MaterialTheme.typography.labelSmall)
-                            Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
-                            Text("${bytes(home.upload)}/s", style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (!homeHeaderVisible) {
+                        if (homeHeaderVisible) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Text("${bytes(home.download)}/s", style = MaterialTheme.typography.labelSmall)
+                                Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                                Text("${bytes(home.upload)}/s", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                            }
                             val nextMode = when (home.mode) {
                                 TunnelState.Mode.Rule -> TunnelState.Mode.Global
                                 TunnelState.Mode.Global -> TunnelState.Mode.Direct
                                 else -> TunnelState.Mode.Rule
                             }
-                            TextButton(onClick = { model.setMode(nextMode) }) {
+                            TextButton(
+                                onClick = { model.setMode(nextMode) },
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                            ) {
                                 Text(when (home.mode) {
                                     TunnelState.Mode.Rule -> text("Rule", "规则")
                                     TunnelState.Mode.Global -> text("Global", "全局")
                                     else -> text("Direct", "直连")
-                                })
+                                }, style = MaterialTheme.typography.labelMedium)
                             }
                             IconButton(onClick = { toggle() }) {
                                 Icon(Icons.Default.PowerSettingsNew, if (home.connected) text("Disconnect", "断开") else text("Connect", "连接"))
