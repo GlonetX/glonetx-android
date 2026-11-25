@@ -1,6 +1,7 @@
 package com.github.kr328.clash
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ComponentName
@@ -188,6 +189,7 @@ class MainActivity : ComponentActivity() {
             }
         } else if (result is QRResult.QRError) model.message(result.exception.message ?: "Unable to scan QR code")
     }
+    @SuppressLint("WrongConstant")
     val external = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
         if (result.resultCode == Activity.RESULT_OK && uri != null) {
