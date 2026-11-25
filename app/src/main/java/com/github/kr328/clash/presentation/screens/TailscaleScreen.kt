@@ -42,14 +42,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewModelScope
-import com.github.kr328.clash.core.Clash
 import com.github.kr328.clash.core.model.ConfigurationOverride
-import com.github.kr328.clash.core.model.LogMessage
 import com.github.kr328.clash.data.ClientRepository
+import com.github.kr328.clash.data.LogRepository
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class TailscaleViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ClientRepository(application)
@@ -60,21 +62,25 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
     val error = MutableStateFlow<String?>(null)
     val saved = MutableStateFlow(false)
     val authUrl = MutableStateFlow<String?>(null)
+    val starting = MutableStateFlow(false)
+    val loginFailed = MutableStateFlow(false)
 
     private var original: ConfigurationOverride.Tailscale? = null
-    private var logChannel: Channel<LogMessage>? = null
+    private var logJob: Job? = null
+    private var loginJob: Job? = null
+    private val logReady = CompletableDeferred<Unit>()
     val dirty: Boolean get() = draft.value != original
 
     init {
-        load()
-        viewModelScope.launch {
-            logChannel = runCatching { Clash.subscribeLogcat() }.getOrNull()
-            logChannel?.let { channel ->
-                for (message in channel) {
+        logJob = viewModelScope.launch {
+            LogRepository(application).stream().collect { messages ->
+                logReady.complete(Unit)
+                messages.forEach { message ->
                     extractTailscaleAuthUrl(message.message)?.let { authUrl.value = it }
                 }
             }
         }
+        load()
     }
 
     fun load() = viewModelScope.launch {
@@ -85,6 +91,9 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
             original = current
             loaded.value = true
             error.value = null
+            if (current?.enabled == true && current.authKey.isNullOrBlank()) {
+                requestLoginUrl()
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -95,13 +104,50 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun update(transform: (ConfigurationOverride.Tailscale) -> ConfigurationOverride.Tailscale) {
-        draft.value = (draft.value ?: ConfigurationOverride.Tailscale()).let(transform)
+        val previous = draft.value
+        val next = (previous ?: ConfigurationOverride.Tailscale()).let(transform)
+        draft.value = next
+        if (previous?.name != next.name || previous?.authKey != next.authKey || previous?.enabled != next.enabled) {
+            authUrl.value = null
+            loginFailed.value = false
+            loginJob?.cancel()
+            starting.value = false
+        }
     }
 
     fun setEnabled(enabled: Boolean) = update { it.copy(enabled = enabled) }
 
+    fun requestLoginUrl() {
+        if (starting.value || authUrl.value != null) return
+        val name = draft.value?.name?.takeIf { it.isNotBlank() } ?: "tailscale"
+        starting.value = true
+        loginFailed.value = false
+        loginJob = viewModelScope.launch {
+            try {
+                withTimeoutOrNull(2_000) { logReady.await() }
+                delay(500)
+                repeat(20) { attempt ->
+                    if (authUrl.value != null) return@launch
+                    try {
+                        repository.ip(name)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // The proxy may not be loaded yet, or it may still be waiting for authorization.
+                    }
+                    if (authUrl.value != null) return@launch
+                    delay(if (attempt < 3) 500 else 1_500)
+                }
+                loginFailed.value = authUrl.value == null
+            } finally {
+                starting.value = false
+            }
+        }
+    }
+
     override fun onCleared() {
-        logChannel?.cancel()
+        loginJob?.cancel()
+        logJob?.cancel()
         super.onCleared()
     }
 
@@ -113,6 +159,9 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
             original = draft.value
             saved.value = true
             error.value = null
+            if (draft.value?.enabled == true && draft.value?.authKey.isNullOrBlank()) {
+                requestLoginUrl()
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -144,12 +193,13 @@ fun TailscaleScreen(
     val error by model.error.collectAsStateWithLifecycle()
     val saved by model.saved.collectAsStateWithLifecycle()
     val authUrl by model.authUrl.collectAsStateWithLifecycle()
+    val starting by model.starting.collectAsStateWithLifecycle()
+    val loginFailed by model.loginFailed.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var advanced by remember { mutableStateOf(false) }
     var loginMode by remember { mutableStateOf(if (draft?.authKey.isNullOrBlank()) "direct" else "key") }
     LaunchedEffect(draft?.authKey) { loginMode = if (draft?.authKey.isNullOrBlank()) "direct" else "key" }
-    LaunchedEffect(saved) { if (saved) onBack() }
 
     if (!loaded) {
         if (error != null) ErrorState(error!!) { model.load() } else BusyState()
@@ -166,13 +216,37 @@ fun TailscaleScreen(
             InfoCard(
                 title = "Tailscale",
                 subtitle = text(
-                    "Tailscale is added as a Mihomo outbound proxy. Direct login prints a login URL in the log on first use.",
-                    "Tailscale 会作为 Mihomo 的出站节点写入配置覆盖。直接登录模式会在首次使用时把登录地址输出到日志中。",
+                    "Tailscale is added as a Mihomo outbound proxy. With the VPN running, saving an enabled direct-login node starts it automatically and shows the login URL here.",
+                    "Tailscale 会作为 Mihomo 的出站节点写入配置覆盖。VPN 运行且启用直接登录并保存后，会自动启动节点，登录地址会显示在本页。",
                 ),
                 icon = Icons.Default.Hub,
             )
         }
         if (error != null) item { ErrorState(error!!) { model.load() } }
+        if (starting && authUrl == null) {
+            item {
+                InfoCard(
+                    title = text("Starting Tailscale", "正在启动 Tailscale"),
+                    subtitle = text(
+                        "Contacting the control server. The login URL will appear here automatically.",
+                        "正在连接控制服务器，登录链接会自动显示在这里。",
+                    ),
+                    icon = Icons.Default.NetworkCheck,
+                )
+            }
+        }
+        if (loginFailed && authUrl == null) {
+            item {
+                InfoCard(
+                    title = text("Login URL not received", "未获取到登录链接"),
+                    subtitle = text(
+                        "Make sure the VPN is running and the configuration has been saved, then try again.",
+                        "请确认 VPN 已启动且配置已保存，然后重试。",
+                    ),
+                    icon = Icons.Default.Info,
+                )
+            }
+        }
         authUrl?.let { url ->
             item {
                 InfoCard(
@@ -229,8 +303,21 @@ fun TailscaleScreen(
                     } else {
                         SettingAction(
                             text("Get login URL", "获取登录链接"),
-                            text("Save and reload, then open Logs to authorize this node.", "保存并重新加载配置后，打开日志完成节点授权。"),
+                            when {
+                                authUrl != null -> text("Login URL is ready above.", "登录链接已显示在上方。")
+                                starting -> text("Starting the node and requesting a login URL…", "正在启动节点并获取登录链接…")
+                                loginFailed -> text("Tap to retry. Check that the VPN is running.", "点击重试，并确认 VPN 已启动。")
+                                else -> text(
+                                    "Start this node automatically; no manual proxy selection is required.",
+                                    "自动启动该节点，无需先手动选择代理。",
+                                )
+                            },
                             icon = Icons.Default.HelpOutline,
+                        ) { model.requestLoginUrl() }
+                        SettingAction(
+                            text("View logs", "查看日志"),
+                            text("Inspect Tailscale startup and authorization messages.", "查看 Tailscale 启动与授权日志。"),
+                            icon = Icons.Default.Info,
                         ) { onOpenLogs() }
                     }
                 }
@@ -326,8 +413,8 @@ fun TailscaleScreen(
                 InfoCard(
                     title = text("How to use", "如何使用"),
                     subtitle = text(
-                        "Save and reload the configuration. In direct login mode, open Logs and use the printed URL to authorize this node. Then select it in a proxy group or route a rule to it.",
-                        "保存并重新加载配置。直接登录模式下，打开日志页，用输出的链接完成节点授权；随后在代理组中选择该节点，或在规则中将流量指向它。",
+                        "Save to start the node. In direct login mode, authorize the URL shown on this page. Then select it in a proxy group or route a rule to it.",
+                        "保存后会自动启动节点。直接登录模式下，使用本页显示的链接完成授权；随后在代理组中选择该节点，或在规则中将流量指向它。",
                     ),
                     icon = Icons.Default.Info,
                 )
@@ -339,7 +426,7 @@ fun TailscaleScreen(
                 onClick = { model.save() },
                 enabled = model.dirty && !busy,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(text("Save", "保存")) }
+            ) { Text(if (saved && !model.dirty) text("Saved", "已保存") else text("Save", "保存")) }
         }
     }
 }
