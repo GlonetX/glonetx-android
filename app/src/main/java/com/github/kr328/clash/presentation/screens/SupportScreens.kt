@@ -92,13 +92,42 @@ fun HelpScreen(onOpenUrl: (String) -> Unit, showGuides: Boolean = true) {
 }
 
 @Composable
-fun AboutScreen(version: String, onOpenUrl: (String) -> Unit) {
+fun AboutScreen(appVersion: String, appVersionCode: Long, coreVersion: String, onOpenUrl: (String) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("GlonetX", style = MaterialTheme.typography.headlineLarge)
-            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){Icon(Icons.Default.Info,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.primary);Text("${text("Version","版本")} $version", style = MaterialTheme.typography.labelLarge)}
+            Text(
+                text("Mihomo-powered Android client", "基于 Mihomo 的 Android 客户端"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+            Column(Modifier.padding(vertical = 4.dp)) {
+                AboutInfoRow(text("App version", "应用版本"), appVersion)
+                HorizontalDivider()
+                AboutInfoRow(text("Version code", "版本号"), appVersionCode.toString())
+                HorizontalDivider()
+                AboutInfoRow(text("Core version", "核心版本"), coreVersion)
+                HorizontalDivider()
+                AboutInfoRow(text("Package", "包名"), "io.github.glonetx.android")
+            }
         }
         HelpScreen(onOpenUrl, showGuides = false)
+    }
+}
+
+@Composable
+private fun AboutInfoRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SelectionContainer(Modifier.weight(1f)) {
+            Text(value, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+        }
     }
 }
 

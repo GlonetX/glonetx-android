@@ -555,7 +555,10 @@ class MainActivity : ComponentActivity() {
                 composable("logs") { LogsScreen(onOpen = { name -> nav.navigate("log/${Uri.encode(name)}") }) }
                 composable("log/{name}") { e -> LogViewerScreen(e.arguments?.getString("name").orEmpty(), { nav.popBackStack() }, logQuery, { logQuery = it }) }
                 composable("help") { HelpScreen(onOpenUrl = { openLink(it) }) }
-                composable("about") { AboutScreen("${activity.packageManager.getPackageInfo(activity.packageName, 0).versionName}\n${Bridge.nativeCoreVersion()}") { openLink(it) } }
+                composable("about") {
+                    val info = activity.packageManager.getPackageInfo(activity.packageName, 0)
+                    AboutScreen(info.versionName.orEmpty(), info.longVersionCode, Bridge.nativeCoreVersion()) { openLink(it) }
+                }
             }
             }
         }
