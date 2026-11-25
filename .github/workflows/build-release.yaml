@@ -106,6 +106,56 @@ jobs:
         if: success()
         run: ./gradlew --no-daemon --no-parallel --max-workers=1 app:assembleMetaRelease
 
+      - name: Verify release signing certificate
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.RELEASE_SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+
+          expected="${EXPECTED_CERT_SHA256//:/}"
+          expected="${expected^^}"
+          if [[ ! "$expected" =~ ^[0-9A-F]{64}$ ]]; then
+            echo "::error::RELEASE_SIGNING_CERT_SHA256 must be a 64-character SHA-256 certificate fingerprint (colons optional)."
+            exit 1
+          fi
+
+          mapfile -t apksigners < <(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner -perm -u+x | sort -V)
+          if (( ${#apksigners[@]} == 0 )); then
+            echo "::error::No executable apksigner found under $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          apksigner="${apksigners[-1]}"
+
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/meta/release/*.apk)
+          shopt -u nullglob
+          if (( ${#apks[@]} == 0 )); then
+            echo "::error::No meta release APKs found"
+            exit 1
+          fi
+
+          for apk in "${apks[@]}"; do
+            cert_output="$("$apksigner" verify --print-certs "$apk")"
+            mapfile -t cert_digests < <(sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p' <<< "$cert_output")
+            if (( ${#cert_digests[@]} != 1 )); then
+              echo "::error::Expected exactly one signer certificate in $apk"
+              exit 1
+            fi
+            actual="${cert_digests[0]//:/}"
+            actual="${actual^^}"
+            if [[ ! "$actual" =~ ^[0-9A-F]{64}$ ]]; then
+              echo "::error::Invalid signer certificate digest in $apk"
+              exit 1
+            fi
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::Signing certificate mismatch for $apk"
+              echo "Expected: $expected"
+              echo "Actual:   $actual"
+              exit 1
+            fi
+            echo "Verified signing certificate: $apk"
+          done
+
       # One `<apk>.sha256` file next to each APK, in `sha256sum` format.
       # The in-app updater downloads the matching file and refuses to
       # install an APK whose digest does not match.
