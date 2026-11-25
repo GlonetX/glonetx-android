@@ -107,7 +107,17 @@ class MainActivity : ComponentActivity() {
             setupShortcuts(token)
         }
     }
-    private fun setupShortcuts(token: String) {
+    internal fun setupShortcuts(token: String) {
+        val aliasState = packageManager.getComponentEnabledSetting(
+            ComponentName(this, "com.github.kr328.clash.MainActivityAlias"),
+        )
+        if (aliasState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED &&
+            aliasState != PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+        ) {
+            ShortcutManagerCompat.removeAllDynamicShortcuts(this)
+            return
+        }
+
         val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS or Intent.FLAG_ACTIVITY_NO_ANIMATION
         val shortcuts = listOf(
             Triple("toggle_clash", Intents.ACTION_TOGGLE_CLASH, R.drawable.ic_toggle_all),
@@ -213,6 +223,16 @@ class MainActivity : ComponentActivity() {
                 if (ui.hideAppIcon) PackageManager.COMPONENT_ENABLED_STATE_DISABLED else PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP,
             )
+            if (ui.hideAppIcon) {
+                ShortcutManagerCompat.removeAllDynamicShortcuts(activity)
+            } else {
+                activity.lifecycleScope.launch {
+                    val token = withContext(Dispatchers.IO) {
+                        Remote.service.remote.get().settings().getControlToken()
+                    }
+                    activity.setupShortcuts(token)
+                }
+            }
         }.onFailure { model.message(it.message ?: "Unable to change the launcher icon") } }
     }
     val snackbar = remember { SnackbarHostState() }
