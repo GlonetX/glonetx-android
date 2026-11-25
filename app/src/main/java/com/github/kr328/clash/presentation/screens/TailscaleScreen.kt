@@ -3,6 +3,7 @@ package com.github.kr328.clash.presentation.screens
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.HelpOutline
@@ -53,6 +55,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
+enum class TailscaleStatus { Unknown, NeedsLogin, Starting, Running, LoggedOut }
+
+internal fun generateTailscaleHostname(proxyName: String, model: String): String {
+    fun sanitize(value: String): String = value
+        .lowercase()
+        .replace(Regex("[^a-z0-9]+"), "-")
+        .trim('-')
+        .take(24)
+
+    val suffix = sanitize(model).ifBlank { sanitize(proxyName) }.ifBlank { "node" }
+    return "glonetx-$suffix".take(63)
+}
+
 class TailscaleViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = ClientRepository(application)
 
@@ -64,6 +79,8 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
     val authUrl = MutableStateFlow<String?>(null)
     val starting = MutableStateFlow(false)
     val loginFailed = MutableStateFlow(false)
+    val status = MutableStateFlow(TailscaleStatus.Unknown)
+    val account = MutableStateFlow<String?>(null)
 
     private var original: ConfigurationOverride.Tailscale? = null
     private var logJob: Job? = null
@@ -77,6 +94,18 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
                 logReady.complete(Unit)
                 messages.forEach { message ->
                     extractTailscaleAuthUrl(message.message)?.let { authUrl.value = it }
+                    parseTailscaleStatus(message.message)?.let { next ->
+                        status.value = next
+                        when (next) {
+                            TailscaleStatus.Running -> {
+                                starting.value = false
+                                loginFailed.value = false
+                            }
+                            TailscaleStatus.LoggedOut -> authUrl.value = null
+                            else -> Unit
+                        }
+                    }
+                    extractTailscaleAccount(message.message)?.let { account.value = it }
                 }
             }
         }
@@ -87,8 +116,10 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
         busy.value = true
         try {
             val current = repository.override().tailscale
-            draft.value = current
             original = current
+            draft.value = current?.takeIf { it.enabled && it.hostname.isNullOrBlank() }?.let { tailscale ->
+                tailscale.copy(hostname = generateTailscaleHostname(tailscale.name, Build.MODEL))
+            } ?: current
             loaded.value = true
             error.value = null
             if (current?.enabled == true && current.authKey.isNullOrBlank()) {
@@ -110,15 +141,26 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
         if (previous?.name != next.name || previous?.authKey != next.authKey || previous?.enabled != next.enabled) {
             authUrl.value = null
             loginFailed.value = false
+            status.value = TailscaleStatus.Unknown
+            account.value = null
             loginJob?.cancel()
             starting.value = false
         }
     }
 
-    fun setEnabled(enabled: Boolean) = update { it.copy(enabled = enabled) }
+    fun setEnabled(enabled: Boolean) = update { current ->
+        current.copy(
+            enabled = enabled,
+            hostname = if (enabled && current.hostname.isNullOrBlank()) {
+                generateTailscaleHostname(current.name, Build.MODEL)
+            } else {
+                current.hostname
+            },
+        )
+    }
 
     fun requestLoginUrl() {
-        if (starting.value || authUrl.value != null) return
+        if (starting.value || authUrl.value != null || status.value == TailscaleStatus.Running) return
         val name = draft.value?.name?.takeIf { it.isNotBlank() } ?: "tailscale"
         starting.value = true
         loginFailed.value = false
@@ -127,7 +169,7 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
                 withTimeoutOrNull(2_000) { logReady.await() }
                 delay(500)
                 repeat(20) { attempt ->
-                    if (authUrl.value != null) return@launch
+                    if (authUrl.value != null || status.value == TailscaleStatus.Running) return@launch
                     try {
                         repository.ip(name)
                     } catch (e: CancellationException) {
@@ -135,10 +177,10 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
                     } catch (_: Exception) {
                         // The proxy may not be loaded yet, or it may still be waiting for authorization.
                     }
-                    if (authUrl.value != null) return@launch
+                    if (authUrl.value != null || status.value == TailscaleStatus.Running) return@launch
                     delay(if (attempt < 3) 500 else 1_500)
                 }
-                loginFailed.value = authUrl.value == null
+                loginFailed.value = authUrl.value == null && status.value != TailscaleStatus.Running
             } finally {
                 starting.value = false
             }
@@ -155,8 +197,12 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
         busy.value = true
         try {
             val current = repository.override()
-            repository.saveOverride(current.copy(tailscale = draft.value))
-            original = draft.value
+            val next = draft.value?.takeIf { it.enabled && it.hostname.isNullOrBlank() }?.let { tailscale ->
+                tailscale.copy(hostname = generateTailscaleHostname(tailscale.name, Build.MODEL))
+            } ?: draft.value
+            draft.value = next
+            repository.saveOverride(current.copy(tailscale = next))
+            original = next
             saved.value = true
             error.value = null
             if (draft.value?.enabled == true && draft.value?.authKey.isNullOrBlank()) {
@@ -181,6 +227,28 @@ internal fun extractTailscaleAuthUrl(message: String): String? {
     }
 }
 
+internal fun parseTailscaleStatus(message: String): TailscaleStatus? {
+    if (!message.contains("[Tailscale]", ignoreCase = true)) return null
+    return when {
+        message.contains("Switching ipn state", ignoreCase = true) && message.contains("-> Running", ignoreCase = true) ->
+            TailscaleStatus.Running
+        message.contains("Switching ipn state", ignoreCase = true) && message.contains("-> Starting", ignoreCase = true) ->
+            TailscaleStatus.Starting
+        message.contains("Switching ipn state", ignoreCase = true) && message.contains("-> NeedsLogin", ignoreCase = true) ->
+            TailscaleStatus.NeedsLogin
+        message.contains("LocalBackend state is NeedsLogin", ignoreCase = true) ->
+            TailscaleStatus.NeedsLogin
+        message.contains("You are logged out", ignoreCase = true) ->
+            TailscaleStatus.LoggedOut
+        else -> null
+    }
+}
+
+internal fun extractTailscaleAccount(message: String): String? {
+    if (!message.contains("active login:", ignoreCase = true)) return null
+    return message.substringAfter("active login:", "").trim().takeIf { it.isNotEmpty() }
+}
+
 @Composable
 fun TailscaleScreen(
     onBack: () -> Unit,
@@ -195,6 +263,8 @@ fun TailscaleScreen(
     val authUrl by model.authUrl.collectAsStateWithLifecycle()
     val starting by model.starting.collectAsStateWithLifecycle()
     val loginFailed by model.loginFailed.collectAsStateWithLifecycle()
+    val status by model.status.collectAsStateWithLifecycle()
+    val account by model.account.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var advanced by remember { mutableStateOf(false) }
@@ -223,7 +293,50 @@ fun TailscaleScreen(
             )
         }
         if (error != null) item { ErrorState(error!!) { model.load() } }
-        if (starting && authUrl == null) {
+        when (status) {
+            TailscaleStatus.Running -> item {
+                InfoCard(
+                    title = text("Tailscale connected", "Tailscale 已连接"),
+                    subtitle = text(
+                        "Node ${value.name} is ready. Tailscale traffic (100.64.0.0/10) is routed through it.",
+                        "节点 ${value.name} 已就绪，Tailscale 网段（100.64.0.0/10）会自动通过它。",
+                    ),
+                    icon = Icons.Default.CheckCircle,
+                )
+            }
+            TailscaleStatus.Starting -> item {
+                InfoCard(
+                    title = text("Starting Tailscale", "正在启动 Tailscale"),
+                    subtitle = text(
+                        "Connecting to the Tailscale network…",
+                        "正在连接 Tailscale 网络…",
+                    ),
+                    icon = Icons.Default.NetworkCheck,
+                )
+            }
+            TailscaleStatus.NeedsLogin -> item {
+                InfoCard(
+                    title = text("Authorization required", "等待授权"),
+                    subtitle = text(
+                        "Use the login URL below to authorize this node.",
+                        "请使用下方登录链接完成节点授权。",
+                    ),
+                    icon = Icons.Default.Lock,
+                )
+            }
+            TailscaleStatus.LoggedOut -> item {
+                InfoCard(
+                    title = text("Login expired", "登录已失效"),
+                    subtitle = text(
+                        "Get a new login URL to authorize this node again.",
+                        "请重新获取登录链接并完成授权。",
+                    ),
+                    icon = Icons.Default.Info,
+                )
+            }
+            TailscaleStatus.Unknown -> Unit
+        }
+        if (starting && authUrl == null && status == TailscaleStatus.Unknown) {
             item {
                 InfoCard(
                     title = text("Starting Tailscale", "正在启动 Tailscale"),
@@ -235,7 +348,7 @@ fun TailscaleScreen(
                 )
             }
         }
-        if (loginFailed && authUrl == null) {
+        if (loginFailed && authUrl == null && status != TailscaleStatus.Running) {
             item {
                 InfoCard(
                     title = text("Login URL not received", "未获取到登录链接"),
@@ -247,25 +360,27 @@ fun TailscaleScreen(
                 )
             }
         }
-        authUrl?.let { url ->
-            item {
-                InfoCard(
-                    title = text("Login URL", "登录链接"),
-                    subtitle = url,
-                    icon = Icons.Default.Lock,
-                    trailing = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            IconButton(onClick = { clipboard.setText(AnnotatedString(url)) }) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = text("Copy", "复制"), modifier = Modifier.size(18.dp))
+        if (status != TailscaleStatus.Running) {
+            authUrl?.let { url ->
+                item {
+                    InfoCard(
+                        title = text("Login URL", "登录链接"),
+                        subtitle = url,
+                        icon = Icons.Default.Lock,
+                        trailing = {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(onClick = { clipboard.setText(AnnotatedString(url)) }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = text("Copy", "复制"), modifier = Modifier.size(18.dp))
+                                }
+                                IconButton(onClick = {
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                }) {
+                                    Icon(Icons.Default.OpenInNew, contentDescription = text("Open", "打开"), modifier = Modifier.size(18.dp))
+                                }
                             }
-                            IconButton(onClick = {
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                            }) {
-                                Icon(Icons.Default.OpenInNew, contentDescription = text("Open", "打开"), modifier = Modifier.size(18.dp))
-                            }
-                        }
-                    },
-                )
+                        },
+                    )
+                }
             }
         }
 
@@ -285,9 +400,23 @@ fun TailscaleScreen(
                         icon = Icons.Default.Lock,
                     ) { loginMode = it }
                     SettingText(text("Proxy name", "节点名称"), value.name, icon = Icons.Default.Hub) {
-                        model.update { current -> current.copy(name = it.ifBlank { "tailscale" }) }
+                        model.update { current ->
+                            val name = it.ifBlank { "tailscale" }
+                            current.copy(
+                                name = name,
+                                hostname = current.hostname ?: generateTailscaleHostname(name, Build.MODEL),
+                            )
+                        }
                     }
-                    SettingText(text("Hostname", "主机名"), value.hostname.orEmpty(), icon = Icons.Default.Dns) {
+                    SettingText(
+                        text("Hostname", "主机名"),
+                        value.hostname.orEmpty(),
+                        icon = Icons.Default.Dns,
+                        hint = text(
+                            "Leave blank to generate glonetx-<device model>.",
+                            "留空自动使用 glonetx-设备型号。",
+                        ),
+                    ) {
                         model.update { current -> current.copy(hostname = it.ifBlank { null }) }
                     }
                     if (loginMode == "key") {
@@ -304,6 +433,7 @@ fun TailscaleScreen(
                         SettingAction(
                             text("Get login URL", "获取登录链接"),
                             when {
+                                status == TailscaleStatus.Running -> text("Tailscale is connected.", "Tailscale 已连接。")
                                 authUrl != null -> text("Login URL is ready above.", "登录链接已显示在上方。")
                                 starting -> text("Starting the node and requesting a login URL…", "正在启动节点并获取登录链接…")
                                 loginFailed -> text("Tap to retry. Check that the VPN is running.", "点击重试，并确认 VPN 已启动。")
@@ -413,8 +543,8 @@ fun TailscaleScreen(
                 InfoCard(
                     title = text("How to use", "如何使用"),
                     subtitle = text(
-                        "Save to start the node. In direct login mode, authorize the URL shown on this page. Then select it in a proxy group or route a rule to it.",
-                        "保存后会自动启动节点。直接登录模式下，使用本页显示的链接完成授权；随后在代理组中选择该节点，或在规则中将流量指向它。",
+                        "Tailscale traffic (100.64.0.0/10) is routed through this node automatically after login. To use it for other traffic, select the node in a proxy group.",
+                        "登录成功后，Tailscale 网段（100.64.0.0/10）会自动通过该节点。若要用于其他流量，请在代理组中选择该节点。",
                     ),
                     icon = Icons.Default.Info,
                 )

@@ -18,4 +18,22 @@ class TailscaleAuthUrlTest {
     @Test fun ignoresUnrelatedUrls() {
         assertNull(extractTailscaleAuthUrl("Fetching https://example.com/geoip.dat"))
     }
+
+    @Test fun parsesTailscaleStatusTransitions() {
+        assertEquals(TailscaleStatus.NeedsLogin, parseTailscaleStatus("[Tailscale] Switching ipn state NoState -> NeedsLogin"))
+        assertEquals(TailscaleStatus.Starting, parseTailscaleStatus("[Tailscale] Switching ipn state NeedsLogin -> Starting"))
+        assertEquals(TailscaleStatus.Running, parseTailscaleStatus("[Tailscale] Switching ipn state Starting -> Running"))
+        assertEquals(TailscaleStatus.LoggedOut, parseTailscaleStatus("[Tailscale] You are logged out"))
+    }
+
+    @Test fun extractsTailscaleAccount() {
+        assertEquals("user@example.com", extractTailscaleAccount("[Tailscale] active login: user@example.com"))
+        assertNull(extractTailscaleAccount("[Tailscale] netcheck: ok"))
+    }
+
+    @Test fun generatesReadableHostname() {
+        assertEquals("glonetx-xiaomi-23127pn0cc", generateTailscaleHostname("tailscale", "Xiaomi 23127PN0CC"))
+        assertEquals("glonetx-tailscale", generateTailscaleHostname("tailscale", ""))
+        assertEquals("glonetx-node", generateTailscaleHostname("", ""))
+    }
 }
