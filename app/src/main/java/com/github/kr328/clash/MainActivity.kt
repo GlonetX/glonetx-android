@@ -17,6 +17,9 @@ import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -391,7 +394,15 @@ class MainActivity : ComponentActivity() {
                     NavigationRailItem(selected = route == target, onClick = { selectDestination(target) }, icon = { Icon(icon, null) }, label = { Text(label) })
                 }
             }
-            NavHost(nav, startDestination = "home", Modifier.weight(1f)) {
+            NavHost(
+                nav,
+                startDestination = "home",
+                modifier = Modifier.weight(1f),
+                enterTransition = { fadeIn(tween(180)) },
+                exitTransition = { fadeOut(tween(180)) },
+                popEnterTransition = { fadeIn(tween(180)) },
+                popExitTransition = { fadeOut(tween(180)) },
+            ) {
                 composable("home") {
                     val home by model.home.collectAsStateWithLifecycle()
                     HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi)
