@@ -4,12 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.annotation.SuppressLint
+import android.app.PendingIntent
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import com.github.kr328.clash.common.compat.pendingIntentFlags
 import com.github.kr328.clash.common.compat.registerReceiverCompat
 import com.github.kr328.clash.common.constants.Intents
 import com.github.kr328.clash.common.constants.Permissions
@@ -23,6 +26,7 @@ class TileService : TileService() {
     private var currentProfile = ""
     private var clashRunning = false
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
         val tile = qsTile ?: return
 
@@ -35,8 +39,18 @@ class TileService : TileService() {
                         "VPN permission required. Grant access, then tap again.",
                         Toast.LENGTH_LONG,
                     ).show()
-                    @Suppress("DEPRECATION")
-                    startActivityAndCollapse(vpnRequest)
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        val consent = PendingIntent.getActivity(
+                            this,
+                            0,
+                            vpnRequest,
+                            pendingIntentFlags(0),
+                        )
+                        startActivityAndCollapse(consent)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        startActivityAndCollapse(vpnRequest)
+                    }
                 }
             }
             Tile.STATE_ACTIVE -> {
