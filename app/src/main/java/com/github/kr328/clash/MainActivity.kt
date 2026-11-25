@@ -120,7 +120,6 @@ class MainActivity : ComponentActivity() {
             activity.consumeNavigation()
         }
     }
-    val home by model.home.collectAsStateWithLifecycle()
     val snapshot by model.settings.collectAsStateWithLifecycle()
     val prefs = snapshot?.ui ?: com.github.kr328.clash.service.settings.UiPreferences()
     LaunchedEffect(snapshot?.ui?.hideFromRecents) {
@@ -288,8 +287,9 @@ class MainActivity : ComponentActivity() {
         }
     }
     fun toggle() {
-        if (home.connected) activity.stopClashService()
-        else if (home.active?.imported != true) model.message("Select a valid subscription first")
+        val current = model.home.value
+        if (current.connected) activity.stopClashService()
+        else if (current.active?.imported != true) model.message("Select a valid subscription first")
         else model.launchAction {
             if (startClashWithConsent()) requestNotification()
         }
@@ -392,7 +392,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
             NavHost(nav, startDestination = "home", Modifier.weight(1f)) {
-                composable("home") { HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi) }
+                composable("home") {
+                    val home by model.home.collectAsStateWithLifecycle()
+                    HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi)
+                }
                 composable("proxy") { ProxyScreen(prefs, model::updateUi) }
                 listOf("settings", "app-settings", "network-settings").forEach { page -> composable(page) {
                     SettingsScreen(page, snapshot, model::updateRuntime, model::updateUi, ::navigate,
