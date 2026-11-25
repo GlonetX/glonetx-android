@@ -87,7 +87,12 @@ import java.util.Date
             if (bitmap != null) Image(bitmap, contentDescription = text("Subscription QR code", "订阅二维码"), modifier = Modifier.fillMaxWidth())
             else Text(text("Unable to generate QR code", "无法生成二维码"))
         }, confirmButton = { TextButton(onClick = {
-            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, p.name).putExtra(Intent.EXTRA_TEXT, p.source), p.name))
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, p.name)
+                .putExtra(Intent.EXTRA_TEXT, p.source)
+            val chooser = Intent.createChooser(send, p.name)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(chooser) }
         }) { Text(text("Share", "分享")) } }, dismissButton = { TextButton(onClick = { clipboard.setText(AnnotatedString(p.source)); sharing = null }) { Text(text("Copy link", "复制链接")) } })
     }
     deleting?.let{ p -> ConfirmDialog(text("Delete subscription?","删除订阅？"),p.name,{deleting=null}){deleting=null;model.action{model.repository.delete(p);model.loadProfiles()}} }
