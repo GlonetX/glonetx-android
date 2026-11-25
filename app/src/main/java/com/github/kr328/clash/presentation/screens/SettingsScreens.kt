@@ -10,9 +10,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.kr328.clash.R
 import com.github.kr328.clash.service.settings.*
@@ -54,6 +56,7 @@ fun SettingsScreen(
                         SettingAction(stringResource(R.string.cs_network), stringResource(R.string.cs_network_summary), icon=Icons.Default.NetworkCheck) { onNavigate("network-settings") }
                         SettingAction(stringResource(R.string.cs_override), icon=Icons.Default.Tune) { onNavigate("override") }
                         SettingAction(stringResource(R.string.cs_meta), icon=Icons.Default.Extension) { onNavigate("meta-feature") }
+                        SettingAction(text("Tailscale", "Tailscale"), icon=Icons.Default.Hub) { onNavigate("tailscale") }
                         SettingAction(stringResource(R.string.cs_profiles), icon=Icons.Default.Subscriptions) { onNavigate("profiles") }
                         SettingAction(stringResource(R.string.cs_backup), stringResource(R.string.cs_backup_summary), icon=Icons.Default.Backup) { onNavigate("backup") }
                         SettingAction(stringResource(R.string.cs_logs), icon=Icons.Default.Description) { onNavigate("logs") }
@@ -148,26 +151,94 @@ fun SettingsScreen(
 @Composable
 fun SettingSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 12.dp))
-        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(vertical = 4.dp), content = content) }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Column(Modifier.padding(vertical = 4.dp), content = content)
+        }
     }
 }
 
 @Composable
-fun SettingAction(title: String, summary: String? = null, icon: ImageVector? = null, onClick: () -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent), modifier = Modifier.clickable(onClick = onClick))
+fun SettingAction(
+    title: String,
+    summary: String? = null,
+    icon: ImageVector? = null,
+    trailingSummary: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (!trailingSummary && !summary.isNullOrBlank()) {
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (trailingSummary && !summary.isNullOrBlank()) {
+            Text(
+                summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 180.dp),
+            )
+        }
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+    }
 }
 
 @Composable
 fun SettingSwitch(title: String, checked: Boolean, summary: String? = null, icon: ImageVector? = null, onChange: (Boolean) -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) })
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (!summary.isNullOrBlank()) {
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 @Composable
 fun <T> SettingChoice(title: String, selected: T, choices: List<Pair<T, String>>, icon: ImageVector? = null, onChange: (T) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    SettingAction(title, choices.firstOrNull { it.first == selected }?.second, icon = icon) { open = true }
+    SettingAction(title, choices.firstOrNull { it.first == selected }?.second, icon = icon, trailingSummary = true) { open = true }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(title) },
         text = { Column { choices.forEach { (value, label) ->
             Row(Modifier.fillMaxWidth().clickable { open = false; onChange(value) }.padding(vertical = 4.dp)) {
@@ -185,13 +256,15 @@ fun SettingNumber(title: String, value: Int, range: IntRange, suffix: String = "
 
 @Composable
 fun SettingText(title: String, value: String, maxLength: Int = 4096, singleLine: Boolean = false,
-                validate: (String) -> Boolean = { true }, hint: String = "", icon: ImageVector? = null, displaySuffix: String = "", onChange: (String) -> Unit) {
+                validate: (String) -> Boolean = { true }, hint: String = "", icon: ImageVector? = null, displaySuffix: String = "", secure: Boolean = false, onChange: (String) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf(value) }
-    SettingAction(title, (value + displaySuffix).ifBlank { stringResource(R.string.cs_not_set) }, icon = icon) { draft = value; open = true }
+    val summary = if (secure && value.isNotBlank()) "••••••••" else (value + displaySuffix).ifBlank { stringResource(R.string.cs_not_set) }
+    SettingAction(title, summary, icon = icon, trailingSummary = true) { draft = value; open = true }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(title) }, text = {
         OutlinedTextField(value = draft, onValueChange = { if(it.length <= maxLength) draft = it },
             singleLine = singleLine, minLines = if(singleLine) 1 else 3, maxLines = 6,
+            visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
             supportingText = { Text(hint) }, isError = !validate(draft))
     }, confirmButton = { TextButton(onClick = { open = false; onChange(draft) }, enabled = validate(draft)) { Text(stringResource(R.string.cs_save)) } },
         dismissButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.cs_cancel)) } })

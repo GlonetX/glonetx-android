@@ -32,11 +32,54 @@ var processors = []processor{
 type processor func(cfg *config.RawConfig, profileDir string) error
 
 func patchOverride(cfg *config.RawConfig, _ string) error {
-	if err := json.NewDecoder(strings.NewReader(ReadOverride(OverrideSlotPersist))).Decode(cfg); err != nil {
-		log.Warnln("Apply persist override: %s", err.Error())
+	var tailscaleProxy map[string]any
+	for _, slot := range []OverrideSlot{OverrideSlotPersist, OverrideSlotSession} {
+		raw := ReadOverride(slot)
+		if err := json.NewDecoder(strings.NewReader(raw)).Decode(cfg); err != nil {
+			log.Warnln("Apply override: %s", err.Error())
+		}
+
+		var envelope struct {
+			Tailscale json.RawMessage `json:"tailscale"`
+		}
+		if err := json.Unmarshal([]byte(raw), &envelope); err != nil || len(envelope.Tailscale) == 0 {
+			continue
+		}
+		if string(envelope.Tailscale) == "null" {
+			tailscaleProxy = nil
+			continue
+		}
+		var proxy map[string]any
+		if err := json.Unmarshal(envelope.Tailscale, &proxy); err != nil {
+			continue
+		}
+		if enabled, ok := proxy["enabled"].(bool); ok && !enabled {
+			tailscaleProxy = nil
+			continue
+		}
+		delete(proxy, "enabled")
+		proxy["type"] = "tailscale"
+		if name, _ := proxy["name"].(string); name == "" {
+			proxy["name"] = "tailscale"
+		}
+		if stateDir, _ := proxy["state-dir"].(string); stateDir == "" {
+			if name, _ := proxy["name"].(string); name != "" {
+				proxy["state-dir"] = "tailscale/" + strings.NewReplacer("/", "_", "\\", "_").Replace(name)
+			}
+		}
+		tailscaleProxy = proxy
 	}
-	if err := json.NewDecoder(strings.NewReader(ReadOverride(OverrideSlotSession))).Decode(cfg); err != nil {
-		log.Warnln("Apply session override: %s", err.Error())
+	if tailscaleProxy != nil {
+		if name, _ := tailscaleProxy["name"].(string); name != "" {
+			proxies := make([]map[string]any, 0, len(cfg.Proxy)+1)
+			for _, proxy := range cfg.Proxy {
+				if proxy["name"] != name {
+					proxies = append(proxies, proxy)
+				}
+			}
+			cfg.Proxy = proxies
+		}
+		cfg.Proxy = append(cfg.Proxy, tailscaleProxy)
 	}
 
 	return nil

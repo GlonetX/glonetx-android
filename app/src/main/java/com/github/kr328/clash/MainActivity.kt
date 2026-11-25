@@ -482,6 +482,9 @@ class MainActivity : ComponentActivity() {
                     }
                     "home" -> Text("GlonetX")
                     "settings" -> Text(text("Settings", "设置"))
+                    "override" -> Text(text("Configuration overrides", "配置覆盖"))
+                    "meta-feature" -> Text(text("Kernel features", "内核特性"))
+                    "tailscale" -> Text("Tailscale")
                     else -> Text(route.substringBefore('/').replace('-', ' ').replaceFirstChar { it.uppercase() })
                 }
             }, navigationIcon = {
@@ -529,7 +532,8 @@ class MainActivity : ComponentActivity() {
                 composable("backup") { BackupScreen() }
                 composable("access") { snapshot?.let { AccessControlScreen(it, model::updateRuntime, model::updateUi) } }
                 composable("override") { OverrideScreen(false, { nav.popBackStack() }) }
-                composable("meta-feature") { OverrideScreen(true, { nav.popBackStack() }) }
+                composable("meta-feature") { KernelFeaturesScreen({ nav.popBackStack() }) }
+                composable("tailscale") { TailscaleScreen(onBack = { nav.popBackStack() }, onOpenLogs = { nav.navigate("log/live") }) }
                 composable("logs") { LogsScreen(onOpen = { name -> nav.navigate("log/${Uri.encode(name)}") }) }
                 composable("log/{name}") { e -> LogViewerScreen(e.arguments?.getString("name").orEmpty(), { nav.popBackStack() }) }
                 composable("help") { HelpScreen { openLink(it) } }

@@ -94,7 +94,29 @@ data class ConfigurationOverride(
 
     @SerialName("geox-url")
     val geoxurl: GeoXUrl = GeoXUrl(),
+
+    @SerialName("tailscale")
+    var tailscale: Tailscale? = null,
 ) : Parcelable {
+    @Serializable
+    data class Tailscale(
+        @SerialName("enabled") var enabled: Boolean = true,
+        @SerialName("name") var name: String = "tailscale",
+        @SerialName("hostname") var hostname: String? = null,
+        @SerialName("auth-key") var authKey: String? = null,
+        @SerialName("control-url") var controlUrl: String? = null,
+        @SerialName("state-dir") var stateDir: String? = null,
+        @SerialName("ephemeral") var ephemeral: Boolean = false,
+        @SerialName("udp") var udp: Boolean = false,
+        @SerialName("accept-routes") var acceptRoutes: Boolean = true,
+        @SerialName("exit-node") var exitNode: String? = null,
+        @SerialName("exit-node-allow-lan-access") var exitNodeAllowLanAccess: Boolean = false,
+        @SerialName("dialer-proxy") var dialerProxy: String? = null,
+        @SerialName("interface-name") var interfaceName: String? = null,
+        @SerialName("routing-mark") var routingMark: Int? = null,
+        @SerialName("ip-version") var ipVersion: String? = null,
+    )
+
     @Serializable
     data class Profile(
         @SerialName("store-fake-ip") var storeFakeIp: Boolean? = null,
