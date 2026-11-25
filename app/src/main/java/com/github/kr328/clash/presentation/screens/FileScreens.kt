@@ -1,8 +1,10 @@
 package com.github.kr328.clash.presentation.screens
 
+import android.app.Activity
 import android.content.Intent
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -26,6 +28,7 @@ import kotlinx.coroutines.withContext
 
 @Composable fun FilesScreen(id:String,onBack:()->Unit,model:FeatureViewModel=viewModel()) {
     val context=LocalContext.current
+    val activity=LocalActivityResultRegistryOwner.current as? Activity
     var parent by rememberSaveable(id){mutableStateOf(id)};var editing by remember{mutableStateOf<File?>(null)};var deleting by remember{mutableStateOf<File?>(null)};var rename by rememberSaveable{mutableStateOf("")};var transfer by rememberSaveable{mutableStateOf<String?>(null)}
     val files by model.files.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle()
     val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri->val target=transfer;if(uri!=null&&target!=null)model.action{model.repository.exportFile(target,uri)};transfer=null}
@@ -37,7 +40,7 @@ import kotlinx.coroutines.withContext
         item{Row(verticalAlignment=Alignment.CenterVertically){if(parent!=id)IconButton(onClick={parent=parent.substringBeforeLast('/',id)}){Icon(Icons.Default.ArrowUpward,text("Parent directory","上级目录"))};Text(parent.substringAfter(id).ifBlank{"/"},Modifier.weight(1f));if(parent.contains("/providers"))IconButton(onClick={import.launch(arrayOf("*/*"))}){Icon(Icons.Default.UploadFile,text("Import","导入"))};IconButton(onClick={model.loadFiles(parent)}){Icon(Icons.Default.Refresh,text("Refresh","刷新"))}}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())};if(error!=null)item{ErrorState(error!!){model.loadFiles(parent)}}
         if(files.isEmpty()&&!busy)item{EmptyState(text("This folder is empty","文件夹为空"))}
-        items(files,key={it.id}){f->Column{InfoCard(f.name,if(f.isDirectory)text("Folder","文件夹")else bytes(f.size),onClick={if(f.isDirectory)parent=if(f.id.startsWith(id))f.id else "$parent/${f.id}" else {val documentId=if(f.id.startsWith(id))f.id else "$parent/${f.id}";val uri=model.repository.fileUri(documentId);runCatching{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_EDIT).setDataAndType(uri,"text/plain").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION),f.name))}.onFailure{model.error.value=it.message}}},trailing={Icon(if(f.isDirectory)Icons.Default.Folder else Icons.Default.Description,null)})
+        items(files,key={it.id}){f->Column{InfoCard(f.name,if(f.isDirectory)text("Folder","文件夹")else bytes(f.size),onClick={if(f.isDirectory)parent=if(f.id.startsWith(id))f.id else "$parent/${f.id}" else {val documentId=if(f.id.startsWith(id))f.id else "$parent/${f.id}";val uri=model.repository.fileUri(documentId);runCatching{val intent=Intent.createChooser(Intent(Intent.ACTION_EDIT).setDataAndType(uri,"text/plain").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION),f.name);if(activity!=null)activity.startActivity(intent)else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}.onFailure{model.error.value=it.message}}},trailing={Icon(if(f.isDirectory)Icons.Default.Folder else Icons.Default.Description,null)})
             if(!f.isDirectory)Row{TextButton(onClick={transfer=if(f.id.startsWith(id))f.id else "$parent/${f.id}";export.launch(f.name)}){Text(text("Export","导出"))};TextButton(onClick={transfer=if(f.id.startsWith(id))f.id else "$parent/${f.id}";replace.launch(arrayOf("*/*"))}){Text(text("Replace","替换"))};if(parent.contains("/providers")){TextButton(onClick={editing=f;rename=f.name}){Text(text("Rename","重命名"))};TextButton(onClick={deleting=f}){Text(text("Delete","删除"))}}}
         }}
     }
