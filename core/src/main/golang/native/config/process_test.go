@@ -75,3 +75,40 @@ func TestPatchNetworkCapabilities(t *testing.T) {
 		t.Fatalf("rules changed: got %#v, want %#v", cfg.Rule, rules)
 	}
 }
+
+func TestPatchOverrideInjectsTailscaleProxy(t *testing.T) {
+	previous := sessionOverride
+	defer func() { sessionOverride = previous }()
+	sessionOverride = `{"tailscale":{"enabled":true,"name":"ts-test"}}`
+
+	cfg := &mihomoconfig.RawConfig{}
+	if err := patchOverride(cfg, ""); err != nil {
+		t.Fatalf("patchOverride() error = %v", err)
+	}
+	if len(cfg.Proxy) != 1 {
+		t.Fatalf("proxy count = %d, want 1", len(cfg.Proxy))
+	}
+	if cfg.Proxy[0]["type"] != "tailscale" {
+		t.Fatalf("proxy type = %v, want tailscale", cfg.Proxy[0]["type"])
+	}
+	if cfg.Proxy[0]["name"] != "ts-test" {
+		t.Fatalf("proxy name = %v, want ts-test", cfg.Proxy[0]["name"])
+	}
+	if cfg.Proxy[0]["state-dir"] != "tailscale/ts-test" {
+		t.Fatalf("state-dir = %v, want tailscale/ts-test", cfg.Proxy[0]["state-dir"])
+	}
+}
+
+func TestPatchOverrideSkipsDisabledTailscale(t *testing.T) {
+	previous := sessionOverride
+	defer func() { sessionOverride = previous }()
+	sessionOverride = `{"tailscale":{"enabled":false,"name":"ts-test"}}`
+
+	cfg := &mihomoconfig.RawConfig{}
+	if err := patchOverride(cfg, ""); err != nil {
+		t.Fatalf("patchOverride() error = %v", err)
+	}
+	if len(cfg.Proxy) != 0 {
+		t.Fatalf("proxy count = %d, want 0", len(cfg.Proxy))
+	}
+}
