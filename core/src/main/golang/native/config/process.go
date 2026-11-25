@@ -52,6 +52,17 @@ func patchExternalController(cfg *config.RawConfig, _ string) error {
 func patchGeneral(cfg *config.RawConfig, profileDir string) error {
 	cfg.Interface = ""
 	cfg.RoutingMark = 0
+
+	// Untrusted profiles must not be able to open network listeners.
+	cfg.Port = 0
+	cfg.SocksPort = 0
+	cfg.RedirPort = 0
+	cfg.TProxyPort = 0
+	cfg.MixedPort = 0
+	cfg.AllowLan = false
+	cfg.BindAddress = "127.0.0.1"
+	cfg.DNS.Listen = "127.0.0.1:53"
+
 	if cfg.ExternalController != "" || cfg.ExternalControllerTLS != "" {
 		cfg.ExternalUI = profileDir + "/ui"
 	}
@@ -93,17 +104,9 @@ func patchTun(cfg *config.RawConfig, _ string) error {
 }
 
 func patchListeners(cfg *config.RawConfig, _ string) error {
-	newListeners := make([]map[string]any, 0, len(cfg.Listeners))
-	for _, mapping := range cfg.Listeners {
-		if proxyType, existType := mapping["type"].(string); existType {
-			switch proxyType {
-			case "tproxy", "redir", "tun":
-				continue // remove those listeners which is not supported
-			}
-		}
-		newListeners = append(newListeners, mapping)
-	}
-	cfg.Listeners = newListeners
+	// Listener definitions are network capabilities and cannot be trusted from
+	// an untrusted profile, regardless of the listener type.
+	cfg.Listeners = nil
 	return nil
 }
 
