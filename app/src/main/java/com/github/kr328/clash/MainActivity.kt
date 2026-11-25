@@ -211,6 +211,10 @@ class MainActivity : ComponentActivity() {
         }.onFailure { model.message(it.message ?: "Unable to start VPN") }
     }
     fun navigate(route: String) { if (route == "reconnect") { if(home.connected) activity.stopClashService(); model.message("Reconnect to apply settings") } else nav.navigate(route) }
+    fun openLink(url: String) {
+        runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            .onFailure { model.message("No browser available") }
+    }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "home"
     LaunchedEffect(route) { model.setHomeVisible(route == "home") }
@@ -271,8 +275,8 @@ class MainActivity : ComponentActivity() {
                 composable("meta-feature") { OverrideScreen(true, { nav.popBackStack() }) }
                 composable("logs") { LogsScreen(onOpen = { name -> nav.navigate("log/${Uri.encode(name)}") }) }
                 composable("log/{name}") { e -> LogViewerScreen(e.arguments?.getString("name").orEmpty(), { nav.popBackStack() }) }
-                composable("help") { HelpScreen { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } }
-                composable("about") { AboutScreen("${activity.packageManager.getPackageInfo(activity.packageName, 0).versionName}\n${Bridge.nativeCoreVersion()}") { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } }
+                composable("help") { HelpScreen { openLink(it) } }
+                composable("about") { AboutScreen("${activity.packageManager.getPackageInfo(activity.packageName, 0).versionName}\n${Bridge.nativeCoreVersion()}") { openLink(it) } }
             }
             }
         }
