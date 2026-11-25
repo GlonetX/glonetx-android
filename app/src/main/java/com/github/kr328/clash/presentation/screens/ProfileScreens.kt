@@ -41,21 +41,8 @@ import java.util.Date
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     LaunchedEffect(Unit) { model.loadProfiles() }
-    Scaffold(
-        floatingActionButton = {
-            if (!busy && profiles.any { it.imported && it.type != Profile.Type.File }) {
-                ExtendedFloatingActionButton(
-                    onClick = { model.action {
-                        profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
-                        model.loadProfiles()
-                    } },
-                    icon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                    text = { Text(text("Update all", "全部更新")) },
-                )
-            }
-        },
-    ) { inner ->
-        LazyColumn(Modifier.fillMaxSize().padding(inner), contentPadding=PaddingValues(start=20.dp,end=20.dp,top=20.dp,bottom=96.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding=PaddingValues(start=20.dp,end=20.dp,top=4.dp,bottom=96.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
             if(error!=null) item { ErrorState(error!!){model.loadProfiles()} }
             if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
@@ -64,14 +51,15 @@ import java.util.Date
                 var menu by remember(p.uuid) { mutableStateOf(false) }
                 Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment=Alignment.CenterVertically) {
-                        Icon(when(p.type){Profile.Type.Url->Icons.Default.Link;Profile.Type.File->Icons.Default.Description;else->Icons.Default.Extension},null,Modifier.size(22.dp),tint=MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(10.dp))
+                        RadioButton(p.active,modifier=Modifier.size(24.dp),enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}})
+                        Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name,style=MaterialTheme.typography.titleMedium,maxLines=1,overflow=TextOverflow.Ellipsis)
-                            Text(when(p.type){Profile.Type.Url->text("Link","链接");Profile.Type.File->text("Local file","本地文件");else->text("External provider","外部 Provider")},style=MaterialTheme.typography.labelSmall)
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                                Icon(when(p.type){Profile.Type.Url->Icons.Default.Link;Profile.Type.File->Icons.Default.Description;else->Icons.Default.Extension},null,Modifier.size(14.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(when(p.type){Profile.Type.Url->text("Link","链接");Profile.Type.File->text("Local file","本地文件");else->text("External provider","外部 Provider")},style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
-                        if(p.active)Text(text("Active","当前使用"),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.tertiary)
-                        RadioButton(p.active,modifier=Modifier.size(32.dp),enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}})
                         Box {
                             IconButton(onClick={menu=true}) { Icon(Icons.Default.MoreVert, text("More", "更多")) }
                             DropdownMenu(menu,{menu=false}) {
@@ -99,7 +87,18 @@ import java.util.Date
                 }
             }
         }
-    }
+        }
+        if (!busy && profiles.any { it.imported && it.type != Profile.Type.File }) {
+            ExtendedFloatingActionButton(
+                onClick = { model.action {
+                    profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
+                    model.loadProfiles()
+                } },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+                icon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                text = { Text(text("Update all", "全部更新")) },
+            )
+        }
     }
     annotating?.let { p ->
         val original = preferences.subscriptionMetadata[p.uuid.toString()] ?: SubscriptionAnnotation()
