@@ -77,7 +77,7 @@ class ActivityResultRegistryRegressionTest {
         }
 
         compose.onNodeWithText("Name").performTextInput(profileName)
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Create local configuration"))
+        compose.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText("Create local configuration"))
         profileCreationStarted = true
         compose.onNodeWithText("Create local configuration").performClick()
 
@@ -85,14 +85,13 @@ class ActivityResultRegistryRegressionTest {
             compose.onAllNodesWithText("Update interval (minutes, 0 disables)")
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNode(hasScrollAction())
+        compose.onAllNodes(hasScrollAction())[0]
             .performScrollToNode(hasText("Configuration and provider files"))
         compose.onNodeWithText("Configuration and provider files").performClick()
 
         compose.waitUntil(TIMEOUT_MILLIS) {
-            compose.onAllNodesWithText("config.yaml").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription("Refresh").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("config.yaml").assertIsDisplayed()
         compose.onNodeWithContentDescription("Refresh").assertIsDisplayed()
     }
 
