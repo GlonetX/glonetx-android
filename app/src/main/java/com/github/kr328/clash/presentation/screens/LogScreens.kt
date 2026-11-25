@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -43,7 +44,12 @@ import java.text.DateFormat
         item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Search messages","搜索日志"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})}
         item{InfoCard(text("Messages","日志"),"${text("Showing","显示")} ${filtered.size} / ${messages.size}",icon=Icons.Default.Article)}
         item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){if(name=="live")FilterChip(paused,{paused=!paused},label={Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(if(paused)Icons.Default.PlayArrow else Icons.Default.Pause,null,Modifier.size(14.dp));Text(text("Pause","暂停"))}});FilterChip(follow,{follow=!follow},label={Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(Icons.Default.KeyboardArrowDown,null,Modifier.size(14.dp));Text(text("Follow","跟随"))}});TextButton(onClick={export.launch(if(name=="live")"glonetx-live.log"else name)}){Icon(Icons.Default.SaveAlt,null);Text(text("Export","导出"))};TextButton(onClick={confirm=true}){Icon(if(name=="live")Icons.Default.Stop else Icons.Default.Delete,null);Text(if(name=="live")text("Stop","停止")else text("Delete","删除"))}}}
-        item{Row{listOf(LogMessage.Level.Debug,LogMessage.Level.Info,LogMessage.Level.Warning,LogMessage.Level.Error).forEach{l->val icon=when(l){LogMessage.Level.Debug->Icons.Default.BugReport;LogMessage.Level.Info->Icons.Default.Info;LogMessage.Level.Warning->Icons.Default.Warning;else->Icons.Default.ErrorOutline};FilterChip(level==l.name,{level=l.name;if(name=="live")model.action{model.repository.level(l)}},label={Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(icon,null,Modifier.size(14.dp));Text(l.name)}})}}}
+        item{
+            val levels=listOf(LogMessage.Level.Debug,LogMessage.Level.Info,LogMessage.Level.Warning,LogMessage.Level.Error)
+            SecondaryTabRow(selectedTabIndex=levels.indexOfFirst{it.name==level}.coerceAtLeast(0),containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary) {
+                levels.forEach{l->val icon=when(l){LogMessage.Level.Debug->Icons.Default.BugReport;LogMessage.Level.Info->Icons.Default.Info;LogMessage.Level.Warning->Icons.Default.Warning;else->Icons.Default.ErrorOutline};Tab(selected=level==l.name,onClick={level=l.name;if(name=="live")model.action{model.repository.level(l)}},icon={Icon(icon,null,Modifier.size(16.dp))},text={Text(l.name)})}
+            }
+        }
         if(error!=null)item{Text(error!!,color=MaterialTheme.colorScheme.error)}
         itemsIndexed(filtered,key={index,m->"${m.time.time}/$index"}){_,m->
             val levelColor=when(m.level){LogMessage.Level.Error->MaterialTheme.colorScheme.error;LogMessage.Level.Warning->MaterialTheme.colorScheme.tertiary;LogMessage.Level.Info->MaterialTheme.colorScheme.primary;else->MaterialTheme.colorScheme.onSurfaceVariant}

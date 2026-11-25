@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
@@ -27,17 +28,19 @@ import com.github.kr328.clash.service.settings.*
         item{Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Shield,null,tint=MaterialTheme.colorScheme.primary);Text(text("Select which apps use the VPN. Reconnect after changing this list.","选择经过 VPN 的应用。修改列表后需重新连接。"))}}
         item{InfoCard(text("Selected apps","已选应用"),"${selected.size} / ${apps.size}",icon=Icons.Default.Apps)}
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("AcceptAll", "AcceptSelected", "DenySelected").forEach { mode ->
+            val modes=listOf("AcceptAll", "AcceptSelected", "DenySelected")
+            SecondaryTabRow(selectedTabIndex=modes.indexOf(snapshot.desired.accessControlMode).coerceAtLeast(0),containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary) {
+                modes.forEach { mode ->
                     val icon=when(mode){"AcceptAll"->Icons.Default.SelectAll;"AcceptSelected"->Icons.Default.Checklist;else->Icons.Default.Block}
-                    FilterChip(
+                    Tab(
                         selected = snapshot.desired.accessControlMode == mode,
                         onClick = { onRuntime { it.copy(accessControlMode = mode) } },
-                        label = { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(icon,null,Modifier.size(14.dp));Text(when (mode) {
+                        icon = { Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        text = { Text(when (mode) {
                             "AcceptAll" -> text("All", "全部")
                             "AcceptSelected" -> text("Include", "仅选中")
                             else -> text("Exclude", "排除选中")
-                        })} },
+                        }) },
                     )
                 }
             }

@@ -70,7 +70,18 @@ import java.util.Date
     }
     LaunchedEffect(selected,sort){if(selected.isNotBlank()){model.loadGroup(selected,sort);onPrefs{it.copy(proxyLastGroup=selected)}} else model.group.value=null}
     Column(Modifier.fillMaxSize()) {
-        if(groups.isNotEmpty()) ScrollableTabRow(groups.indexOf(selected).coerceAtLeast(0),edgePadding=16.dp){groups.forEach{g->Tab(selected==g,{selected=g},text={Text(g)})}}
+        if(groups.isNotEmpty()) {
+            val selectedIndex=groups.indexOf(selected).coerceAtLeast(0)
+            if(groups.size<=4) {
+                SecondaryTabRow(selectedTabIndex=selectedIndex,containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary) {
+                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(g)})}
+                }
+            } else {
+                SecondaryScrollableTabRow(selectedTabIndex=selectedIndex,containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary,edgePadding=16.dp) {
+                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(g)})}
+                }
+            }
+        }
         if(error!=null)ErrorState(error!!){model.loadGroups(prefs.proxyExcludeNotSelectable);if(selected.isNotBlank())model.loadGroup(selected,sort)}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AccountTree,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.width(6.dp));Text(group?.type.orEmpty(),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge);TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}}
