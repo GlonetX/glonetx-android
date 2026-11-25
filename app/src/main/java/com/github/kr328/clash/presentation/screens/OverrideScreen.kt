@@ -4,9 +4,12 @@ package com.github.kr328.clash.presentation.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,8 +27,10 @@ import kotlinx.serialization.json.*
     if(value==null){if(error!=null)ErrorState(error!!){model.load()}else BusyState();return}
     val descriptor=ConfigurationOverride.serializer().descriptor
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{Text(text("Inherit leaves the subscription value unchanged. Changes apply when the configuration reloads.","继承表示沿用订阅中的值。修改将在配置重新加载时生效。"))}
-        item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){Button(enabled=!busy,onClick={model.save()}){Text(text("Save","保存"))};OutlinedButton(onClick={raw=model.codec.encodeToString(JsonObject.serializer(),value);advanced=true}){Text(text("JSON editor","JSON 编辑器"))}}}
+        item{Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Info,null,tint=MaterialTheme.colorScheme.primary);Text(text("Inherit leaves the subscription value unchanged. Changes apply when the configuration reloads.","继承表示沿用订阅中的值。修改将在配置重新加载时生效。"))}}
+        val overrideCount=(0 until descriptor.elementsCount).count{descriptor.getElementName(it).let{key->value[key]!=null&&value[key]!=JsonNull}}
+        item{InfoCard(text("Active overrides","生效覆盖"),"$overrideCount ${text("fields","项")}",icon=Icons.Default.Tune)}
+        item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){Button(enabled=!busy,onClick={model.save()}){Icon(Icons.Default.Save,null);Text(text("Save","保存"))};OutlinedButton(onClick={raw=model.codec.encodeToString(JsonObject.serializer(),value);advanced=true}){Icon(Icons.Default.Code,null);Text(text("JSON editor","JSON 编辑器"))}}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())};if(error!=null)item{Text(error!!,color=MaterialTheme.colorScheme.error)}
         for(i in 0 until descriptor.elementsCount){val key=descriptor.getElementName(i);val isMeta=key in setOf("sniffer","geox-url","geodata-mode","tcp-concurrent","unified-delay","find-process-mode");if(!meta||isMeta)item(key=key){ConfigurationField(listOf(key),descriptor.getElementDescriptor(i),value[key]?:JsonNull,model::set)}}
     }
@@ -37,12 +42,28 @@ import kotlinx.serialization.json.*
     val label=path.last();var expanded by rememberSaveable(path.joinToString(".")){mutableStateOf(false)};var menu by remember{mutableStateOf(false)};var edit by remember{mutableStateOf(false)};var input by remember{mutableStateOf("")};var error by remember{mutableStateOf<String?>(null)}
     val kind=descriptor.kind
     if(kind==StructureKind.CLASS||kind==StructureKind.OBJECT){
-        Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceContainer){Column(Modifier.padding(16.dp)){TextButton(onClick={expanded=!expanded}){Text("${if(expanded)"▾"else"▸"} $label",style=MaterialTheme.typography.titleMedium)};if(expanded)for(i in 0 until descriptor.elementsCount){val key=descriptor.getElementName(i);ConfigurationField(path+key,descriptor.getElementDescriptor(i),(value as? JsonObject)?.get(key)?:JsonNull,onChange)}}};return
+        Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceContainer){Column(Modifier.padding(16.dp)){TextButton(onClick={expanded=!expanded}){Icon(if(expanded)Icons.Default.ExpandLess else Icons.Default.ExpandMore,null);Spacer(Modifier.width(4.dp));Text(label,style=MaterialTheme.typography.titleMedium)};if(expanded)for(i in 0 until descriptor.elementsCount){val key=descriptor.getElementName(i);ConfigurationField(path+key,descriptor.getElementDescriptor(i),(value as? JsonObject)?.get(key)?:JsonNull,onChange)}}};return
     }
     val options:List<Pair<String,JsonElement>>?=when(kind){PrimitiveKind.BOOLEAN->listOf(text("Inherit","继承") to JsonNull,text("Enabled","启用") to JsonPrimitive(true),text("Disabled","关闭") to JsonPrimitive(false));SerialKind.ENUM->listOf(text("Inherit","继承") to JsonNull)+(0 until descriptor.elementsCount).map{descriptor.getElementName(it).let{s->s to JsonPrimitive(s)}};else->null}
     val isSecret=label in setOf("secret","authentication")
-    val summary=if(value==JsonNull)text("Inherit","继承")else if(isSecret)"••••••••"else(value as? JsonPrimitive)?.content?:value.toString()
-    Box{InfoCard(label,summary,onClick={if(options!=null)menu=true else{input=if(value==JsonNull)""else if(kind==PrimitiveKind.STRING)value.jsonPrimitive.content else value.toString();error=null;edit=true}})
+    val summary=when{
+        value==JsonNull->text("Inherit","继承")
+        isSecret->"••••••••"
+        value is JsonArray->"${value.size} ${text("items","项")}"
+        value is JsonObject->"${value.size} ${text("fields","项")}"
+        else->(value as? JsonPrimitive)?.content?:value.toString()
+    }
+    val fieldIcon=when(kind){
+        StructureKind.CLASS,StructureKind.OBJECT->Icons.Default.Folder
+        StructureKind.LIST->Icons.Default.List
+        StructureKind.MAP->Icons.Default.Map
+        PrimitiveKind.BOOLEAN->Icons.Default.ToggleOn
+        PrimitiveKind.INT,PrimitiveKind.LONG,PrimitiveKind.FLOAT,PrimitiveKind.DOUBLE->Icons.Default.Numbers
+        PrimitiveKind.STRING->Icons.Default.TextFields
+        SerialKind.ENUM->Icons.Default.Category
+        else->Icons.Default.Settings
+    }
+    Box{InfoCard(label,summary,icon=fieldIcon,onClick={if(options!=null)menu=true else{input=if(value==JsonNull)""else if(kind==PrimitiveKind.STRING)value.jsonPrimitive.content else value.toString();error=null;edit=true}})
         if(options!=null)DropdownMenu(menu,{menu=false}){options.forEach{(title,option)->DropdownMenuItem(text={Text(title)},onClick={onChange(path,option);menu=false})}}
     }
     if(edit)AlertDialog(onDismissRequest={edit=false},title={Text(label)},text={Column{Text(if(kind==StructureKind.LIST||kind==StructureKind.MAP)text("Enter JSON; leave empty to inherit.","输入 JSON，留空表示继承。")else text("Leave empty to inherit.","留空表示继承。"));OutlinedTextField(input,{input=it},Modifier.fillMaxWidth().heightIn(max=300.dp),isError=error!=null,visualTransformation=if(isSecret)androidx.compose.ui.text.input.PasswordVisualTransformation()else androidx.compose.ui.text.input.VisualTransformation.None);error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={TextButton(onClick={try{val parsed=if(input.isEmpty())JsonNull else if(kind==PrimitiveKind.STRING)JsonPrimitive(input)else Json.parseToJsonElement(input);if(kind==StructureKind.LIST&&parsed!=JsonNull)require(parsed is JsonArray){"Expected a JSON array"};if(kind==StructureKind.MAP&&parsed!=JsonNull)require(parsed is JsonObject){"Expected a JSON object"};if(kind in setOf(PrimitiveKind.INT,PrimitiveKind.LONG,PrimitiveKind.FLOAT,PrimitiveKind.DOUBLE)&&parsed!=JsonNull)require((parsed as? JsonPrimitive)?.doubleOrNull!=null){"Expected a number"};onChange(path,parsed);edit=false}catch(e:Exception){error=e.message}}){Text(text("Apply","应用"))}},dismissButton={TextButton(onClick={edit=false}){Text(text("Cancel","取消"))}})

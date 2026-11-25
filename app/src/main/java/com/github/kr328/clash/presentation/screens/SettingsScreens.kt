@@ -3,10 +3,14 @@ package com.github.kr328.clash.presentation.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.kr328.clash.R
@@ -30,8 +34,12 @@ fun SettingsScreen(
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (snapshot.pendingRestartFields.isNotEmpty()) item {
             ElevatedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(stringResource(R.string.cs_pending), style = MaterialTheme.typography.bodyLarge)
+                Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Default.RestartAlt,null,tint=MaterialTheme.colorScheme.primary)
+                    Column(Modifier.weight(1f)) {
+                        Text("${snapshot.pendingRestartFields.size} ${text("settings pending reconnect","项设置待重连")}", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.cs_pending), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     TextButton(onClick = { onNavigate("reconnect") }) { Text(stringResource(R.string.cs_reconnect)) }
                 }
             }
@@ -41,23 +49,23 @@ fun SettingsScreen(
             "settings" -> {
                 item {
                     SettingSection(stringResource(R.string.cs_settings)) {
-                        SettingAction(stringResource(R.string.cs_application), stringResource(R.string.cs_application_summary)) { onNavigate("app-settings") }
-                        SettingAction(stringResource(R.string.cs_network), stringResource(R.string.cs_network_summary)) { onNavigate("network-settings") }
-                        SettingAction(stringResource(R.string.cs_override)) { onNavigate("override") }
-                        SettingAction(stringResource(R.string.cs_meta)) { onNavigate("meta-feature") }
-                        SettingAction(stringResource(R.string.cs_profiles)) { onNavigate("profiles") }
-                        SettingAction(stringResource(R.string.cs_backup), stringResource(R.string.cs_backup_summary)) { onNavigate("backup") }
-                        SettingAction(stringResource(R.string.cs_logs)) { onNavigate("logs") }
-                        SettingAction(stringResource(R.string.cs_help)) { onNavigate("help") }
-                        SettingAction(stringResource(R.string.cs_about)) { onNavigate("about") }
+                        SettingAction(stringResource(R.string.cs_application), stringResource(R.string.cs_application_summary), icon=Icons.Default.Palette) { onNavigate("app-settings") }
+                        SettingAction(stringResource(R.string.cs_network), stringResource(R.string.cs_network_summary), icon=Icons.Default.NetworkCheck) { onNavigate("network-settings") }
+                        SettingAction(stringResource(R.string.cs_override), icon=Icons.Default.Tune) { onNavigate("override") }
+                        SettingAction(stringResource(R.string.cs_meta), icon=Icons.Default.Extension) { onNavigate("meta-feature") }
+                        SettingAction(stringResource(R.string.cs_profiles), icon=Icons.Default.Subscriptions) { onNavigate("profiles") }
+                        SettingAction(stringResource(R.string.cs_backup), stringResource(R.string.cs_backup_summary), icon=Icons.Default.Backup) { onNavigate("backup") }
+                        SettingAction(stringResource(R.string.cs_logs), icon=Icons.Default.Description) { onNavigate("logs") }
+                        SettingAction(stringResource(R.string.cs_help), icon=Icons.Default.HelpOutline) { onNavigate("help") }
+                        SettingAction(stringResource(R.string.cs_about), icon=Icons.Default.Info) { onNavigate("about") }
                     }
                 }
                 item {
                     SettingSection(text("Tools and diagnostics", "工具与诊断")) {
-                        SettingAction(text("Providers", "Providers")) { onNavigate("providers") }
-                        SettingAction(text("Connections", "连接")) { onNavigate("connections") }
-                        SettingAction(text("IP quality", "IP 质量")) { onNavigate("quality") }
-                        SettingAction(text("Latency and service probes", "延迟与服务检测")) { onNavigate("latency") }
+                        SettingAction(text("Providers", "Providers"), icon=Icons.Default.Dns) { onNavigate("providers") }
+                        SettingAction(text("Connections", "连接"), icon=Icons.Default.Lan) { onNavigate("connections") }
+                        SettingAction(text("IP quality", "IP 质量"), icon=Icons.Default.VerifiedUser) { onNavigate("quality") }
+                        SettingAction(text("Latency and service probes", "延迟与服务检测"), icon=Icons.Default.Speed) { onNavigate("latency") }
                     }
                 }
             }
@@ -68,7 +76,7 @@ fun SettingsScreen(
                         "ForceDark" to stringResource(R.string.cs_dark), "ForceBlack" to stringResource(R.string.cs_black)
                     )) { value -> onUi { it.copy(darkMode = value) } }
                     SettingSwitch(stringResource(R.string.cs_dynamic), u.dynamicColor) { value -> onUi { it.copy(dynamicColor = value) } }
-                    SettingNumber(stringResource(R.string.cs_text_size), u.textScale, 85..130) { value -> onUi { it.copy(textScale = value) } }
+                    SettingNumber(stringResource(R.string.cs_text_size), u.textScale, 85..130, suffix="%", icon=Icons.Default.FormatSize) { value -> onUi { it.copy(textScale = value) } }
                     SettingChoice(stringResource(R.string.cs_language), u.appLanguage, listOf("" to stringResource(R.string.cs_system), "zh" to "简体中文", "en" to "English")) { value -> onUi { it.copy(appLanguage = value) } }
                     SettingSwitch(stringResource(R.string.cs_lightweight), u.lightweightMode, stringResource(R.string.cs_lightweight_summary)) { value -> onUi { it.copy(lightweightMode = value) } }
                 } }
@@ -99,18 +107,18 @@ fun SettingsScreen(
                     SettingSwitch(stringResource(R.string.cs_lan), r.bypassPrivateNetwork) { value -> onRuntime { it.copy(bypassPrivateNetwork = value) } }
                     SettingSwitch(stringResource(R.string.cs_dns), r.dnsHijacking) { value -> onRuntime { it.copy(dnsHijacking = value) } }
                     SettingSwitch(stringResource(R.string.cs_system_proxy), r.systemProxy) { value -> onRuntime { it.copy(systemProxy = value) } }
-                    SettingChoice(stringResource(R.string.cs_stack), r.tunStackMode, listOf("system", "gvisor", "mixed", "mips").map { it to it }) { value -> onRuntime { it.copy(tunStackMode = value) } }
-                    SettingNumber("MTU", r.tunMtu, 1280..9000) { value -> onRuntime { it.copy(tunMtu = value) } }
+                    SettingChoice(stringResource(R.string.cs_stack), r.tunStackMode, listOf("system" to text("System","系统"), "gvisor" to "gVisor", "mixed" to text("Mixed","混合"), "mips" to "MIPS")) { value -> onRuntime { it.copy(tunStackMode = value) } }
+                    SettingNumber("MTU", r.tunMtu, 1280..9000, suffix=" B", icon=Icons.Default.SettingsEthernet) { value -> onRuntime { it.copy(tunMtu = value) } }
                     SettingAction(stringResource(R.string.cs_apps)) { onNavigate("access") }
                 } }
                 item { SettingSection(stringResource(R.string.cs_core)) {
                     SettingSwitch(stringResource(R.string.cs_keepalive), r.keepAliveEnabled) { value -> onRuntime { it.copy(keepAliveEnabled = value) } }
-                    SettingNumber(stringResource(R.string.cs_keepalive_interval), r.keepAliveInterval, 5..3600) { value -> onRuntime { it.copy(keepAliveInterval = value) } }
-                    SettingNumber(stringResource(R.string.cs_keepalive_idle), r.keepAliveIdle, 30..86400) { value -> onRuntime { it.copy(keepAliveIdle = value) } }
+                    SettingNumber(stringResource(R.string.cs_keepalive_interval), r.keepAliveInterval, 5..3600, suffix=text(" s"," 秒"), icon=Icons.Default.Timer) { value -> onRuntime { it.copy(keepAliveInterval = value) } }
+                    SettingNumber(stringResource(R.string.cs_keepalive_idle), r.keepAliveIdle, 30..86400, suffix=text(" s"," 秒"), icon=Icons.Default.TimerOff) { value -> onRuntime { it.copy(keepAliveIdle = value) } }
                     SettingSwitch(stringResource(R.string.cs_fake_ip), r.storeFakeIp) { value -> onRuntime { it.copy(storeFakeIp = value) } }
                     SettingText(stringResource(R.string.cs_user_agent), r.globalUserAgent, maxLength = 512, singleLine = true) { value -> onRuntime { it.copy(globalUserAgent = value) } }
                     SettingSwitch(stringResource(R.string.cs_stop_lost), r.stopOnNetworkLost, stringResource(R.string.cs_stop_lost_summary)) { value -> onRuntime { it.copy(stopOnNetworkLost = value) } }
-                    SettingNumber(stringResource(R.string.cs_stop_delay), r.stopOnNetworkLostInterval, 5..3600) { value -> onRuntime { it.copy(stopOnNetworkLostInterval = value) } }
+                    SettingNumber(stringResource(R.string.cs_stop_delay), r.stopOnNetworkLostInterval, 5..3600, suffix=text(" s"," 秒"), icon=Icons.Default.Timer) { value -> onRuntime { it.copy(stopOnNetworkLostInterval = value) } }
                     SettingText(stringResource(R.string.cs_interface_exceptions), r.stopOnNetworkLostBypassInterfaces.joinToString("\n")) { value -> onRuntime { it.copy(stopOnNetworkLostBypassInterfaces = value.lines().map(String::trim).filter(String::isNotEmpty).toSet()) } }
                 } }
                 item { SettingSection(stringResource(R.string.cs_wifi)) {
@@ -127,9 +135,9 @@ fun SettingsScreen(
                     SettingAction(stringResource(R.string.cs_permissions), onClick = { onPermission {} })
                 } }
                 item { SettingSection(stringResource(R.string.cs_logging)) {
-                    SettingNumber(stringResource(R.string.cs_retention), r.logRetentionDays, 1..365) { value -> onRuntime { it.copy(logRetentionDays = value) } }
-                    SettingNumber(stringResource(R.string.cs_log_size), r.logMaxSizeMb, 1..1024) { value -> onRuntime { it.copy(logMaxSizeMb = value) } }
-                    SettingNumber(stringResource(R.string.cs_log_buffer), r.logRealtimeBuffer, 0..10000) { value -> onRuntime { it.copy(logRealtimeBuffer = value) } }
+                    SettingNumber(stringResource(R.string.cs_retention), r.logRetentionDays, 1..365, suffix=text(" days"," 天"), icon=Icons.Default.CalendarMonth) { value -> onRuntime { it.copy(logRetentionDays = value) } }
+                    SettingNumber(stringResource(R.string.cs_log_size), r.logMaxSizeMb, 1..1024, suffix=" MiB", icon=Icons.Default.Storage) { value -> onRuntime { it.copy(logMaxSizeMb = value) } }
+                    SettingNumber(stringResource(R.string.cs_log_buffer), r.logRealtimeBuffer, 0..10000, suffix=text(" entries"," 条"), icon=Icons.Default.Numbers) { value -> onRuntime { it.copy(logRealtimeBuffer = value) } }
                 } }
             }
         }
@@ -145,20 +153,20 @@ fun SettingSection(title: String, content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-fun SettingAction(title: String, summary: String? = null, onClick: () -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, modifier = Modifier.clickable(onClick = onClick))
+fun SettingAction(title: String, summary: String? = null, icon: ImageVector? = null, onClick: () -> Unit) {
+    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, modifier = Modifier.clickable(onClick = onClick))
 }
 
 @Composable
-fun SettingSwitch(title: String, checked: Boolean, summary: String? = null, onChange: (Boolean) -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } },
+fun SettingSwitch(title: String, checked: Boolean, summary: String? = null, icon: ImageVector? = null, onChange: (Boolean) -> Unit) {
+    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } },
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange) })
 }
 
 @Composable
-fun <T> SettingChoice(title: String, selected: T, choices: List<Pair<T, String>>, onChange: (T) -> Unit) {
+fun <T> SettingChoice(title: String, selected: T, choices: List<Pair<T, String>>, icon: ImageVector? = null, onChange: (T) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    SettingAction(title, choices.firstOrNull { it.first == selected }?.second) { open = true }
+    SettingAction(title, choices.firstOrNull { it.first == selected }?.second, icon = icon) { open = true }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(title) },
         text = { Column { choices.forEach { (value, label) ->
             Row(Modifier.fillMaxWidth().clickable { open = false; onChange(value) }.padding(vertical = 4.dp)) {
@@ -169,17 +177,17 @@ fun <T> SettingChoice(title: String, selected: T, choices: List<Pair<T, String>>
 }
 
 @Composable
-fun SettingNumber(title: String, value: Int, range: IntRange, onChange: (Int) -> Unit) {
-    SettingText(title, value.toString(), singleLine = true,
+fun SettingNumber(title: String, value: Int, range: IntRange, suffix: String = "", icon: ImageVector? = null, onChange: (Int) -> Unit) {
+    SettingText(title, value.toString(), singleLine = true, icon = icon, displaySuffix = suffix,
         validate = { it.toIntOrNull()?.let(range::contains) == true }, hint = "${range.first}–${range.last}") { onChange(it.toInt()) }
 }
 
 @Composable
 fun SettingText(title: String, value: String, maxLength: Int = 4096, singleLine: Boolean = false,
-                validate: (String) -> Boolean = { true }, hint: String = "", onChange: (String) -> Unit) {
+                validate: (String) -> Boolean = { true }, hint: String = "", icon: ImageVector? = null, displaySuffix: String = "", onChange: (String) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     var draft by rememberSaveable { mutableStateOf(value) }
-    SettingAction(title, value.ifBlank { stringResource(R.string.cs_not_set) }) { draft = value; open = true }
+    SettingAction(title, (value + displaySuffix).ifBlank { stringResource(R.string.cs_not_set) }, icon = icon) { draft = value; open = true }
     if (open) AlertDialog(onDismissRequest = { open = false }, title = { Text(title) }, text = {
         OutlinedTextField(value = draft, onValueChange = { if(it.length <= maxLength) draft = it },
             singleLine = singleLine, minLines = if(singleLine) 1 else 3, maxLines = 6,
