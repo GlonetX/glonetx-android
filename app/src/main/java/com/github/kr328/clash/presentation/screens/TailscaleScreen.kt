@@ -86,6 +86,7 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
     private var logJob: Job? = null
     private var loginJob: Job? = null
     private val logReady = CompletableDeferred<Unit>()
+    private var statusAfter: Long = 0
     val dirty: Boolean get() = draft.value != original
 
     init {
@@ -93,6 +94,7 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
             LogRepository(application).stream().collect { messages ->
                 logReady.complete(Unit)
                 messages.forEach { message ->
+                    if (message.time.time < statusAfter) return@forEach
                     extractTailscaleAuthUrl(message.message)?.let { authUrl.value = it }
                     parseTailscaleStatus(message.message)?.let { next ->
                         status.value = next
@@ -138,7 +140,10 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
         val previous = draft.value
         val next = (previous ?: ConfigurationOverride.Tailscale()).let(transform)
         draft.value = next
-        if (previous?.name != next.name || previous?.authKey != next.authKey || previous?.enabled != next.enabled) {
+        if (previous?.name != next.name || previous?.hostname != next.hostname ||
+            previous?.authKey != next.authKey || previous?.enabled != next.enabled
+        ) {
+            statusAfter = System.currentTimeMillis()
             authUrl.value = null
             loginFailed.value = false
             status.value = TailscaleStatus.Unknown
@@ -206,6 +211,11 @@ class TailscaleViewModel(application: Application) : AndroidViewModel(applicatio
             saved.value = true
             error.value = null
             if (draft.value?.enabled == true && draft.value?.authKey.isNullOrBlank()) {
+                statusAfter = System.currentTimeMillis()
+                authUrl.value = null
+                loginFailed.value = false
+                status.value = TailscaleStatus.Unknown
+                starting.value = false
                 requestLoginUrl()
             }
         } catch (e: CancellationException) {
