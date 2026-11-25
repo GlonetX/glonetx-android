@@ -13,6 +13,8 @@ data class ExternalIP(
     val city: String? = null,
     val isp: String? = null,
     val asn: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 ) : Parcelable {
     constructor(parcel: Parcel) : this(
         parcel.readString()!!,
@@ -21,6 +23,8 @@ data class ExternalIP(
         parcel.readString(),
         parcel.readString(),
         parcel.readString(),
+        parcel.readValue(Double::class.java.classLoader) as? Double,
+        parcel.readValue(Double::class.java.classLoader) as? Double,
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
@@ -30,6 +34,8 @@ data class ExternalIP(
         parcel.writeString(city)
         parcel.writeString(isp)
         parcel.writeString(asn)
+        parcel.writeValue(latitude)
+        parcel.writeValue(longitude)
     }
 
     override fun describeContents(): Int {

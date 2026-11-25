@@ -12,23 +12,27 @@ import (
 )
 
 type rawIPInfo struct {
-	IP              string `json:"ip"`
-	Country         string `json:"country"`
-	CountryCode     string `json:"country_code"`
-	Region          string `json:"region"`
-	City            string `json:"city"`
-	ASN             int    `json:"asn"`
-	ASNOrganization string `json:"asn_organization"`
-	Organization    string `json:"organization"`
+	IP              string  `json:"ip"`
+	Country         string  `json:"country"`
+	CountryCode     string  `json:"country_code"`
+	Region          string  `json:"region"`
+	City            string  `json:"city"`
+	Latitude        float64 `json:"latitude"`
+	Longitude       float64 `json:"longitude"`
+	ASN             int     `json:"asn"`
+	ASNOrganization string  `json:"asn_organization"`
+	Organization    string  `json:"organization"`
 }
 
 type ipInfo struct {
-	IP          string `json:"ip"`
-	Country     string `json:"country"`
-	CountryCode string `json:"country_code"`
-	City        string `json:"city"`
-	ISP         string `json:"isp"`
-	ASN         string `json:"asn"`
+	IP          string  `json:"ip"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	City        string  `json:"city"`
+	ISP         string  `json:"isp"`
+	ASN         string  `json:"asn"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 }
 
 const (
@@ -91,6 +95,8 @@ func QueryIPInfo(proxy string) (string, error) {
 		City:        raw.City,
 		ISP:         isp,
 		ASN:         asn,
+		Latitude:    raw.Latitude,
+		Longitude:   raw.Longitude,
 	})
 	if err != nil {
 		return "", err

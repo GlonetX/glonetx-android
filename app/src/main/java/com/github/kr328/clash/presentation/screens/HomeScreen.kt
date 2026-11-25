@@ -32,24 +32,19 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.kr328.clash.presentation.*
 import com.github.kr328.clash.service.settings.*
-import com.github.kr328.clash.design.model.ProbeServices
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val widgets = listOf("traffic_total", "memory", "connections", "services", "providers", "ip_info", "profile")
-@Composable private fun widgetTitle(key:String):String = when(key){"traffic_total"->text("Transferred","累计流量");"memory"->text("Memory","内存");"connections"->text("Connections","连接");"services"->text("Service availability","服务可用性");"providers"->text("Providers","Providers");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
+private val widgets = listOf("traffic_total", "memory", "connections", "ip_info", "profile")
+@Composable private fun widgetTitle(key:String):String = when(key){"traffic_total"->text("Transferred","累计流量");"memory"->text("Memory","内存");"connections"->text("Connections","连接");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
 @Composable private fun widgetIcon(key:String):ImageVector = when(key){
     "traffic_total"->Icons.Default.SwapVert
     "memory"->Icons.Default.Memory
     "connections"->Icons.Default.Link
-    "services"->Icons.Default.CloudQueue
-    "providers"->Icons.Default.Dns
     "ip_info"->Icons.Default.Public
     else->Icons.Default.Description
 }
@@ -60,7 +55,7 @@ private fun formatUptime(seconds:Long):String {
     return if(days>0)"${days}d $time" else time
 }
 
-@Composable fun HomeScreen(state: HomeState, preferences: UiPreferences, settings: SettingsSnapshot?, onToggle:()->Unit, onNavigate:(String)->Unit, onRefreshIp:()->Unit, onPreferences:((UiPreferences)->UiPreferences)->Unit, onHeaderVisible:(Boolean)->Unit, probeModel:FeatureViewModel=viewModel(key="dashboard.probes")) {
+@Composable fun HomeScreen(state: HomeState, preferences: UiPreferences, settings: SettingsSnapshot?, onToggle:()->Unit, onNavigate:(String)->Unit, onRefreshIp:()->Unit, onPreferences:((UiPreferences)->UiPreferences)->Unit, onHeaderVisible:(Boolean)->Unit) {
     var edit by rememberSaveable{mutableStateOf(false)}
     val listState = rememberLazyGridState()
     LaunchedEffect(listState.firstVisibleItemIndex) {
@@ -76,7 +71,9 @@ private fun formatUptime(seconds:Long):String {
     val uptime = if (state.connected && state.startedAt > 0) {
         formatUptime(((now - state.startedAt) / 1000).coerceAtLeast(0))
     } else null
-    val probes by probeModel.probes.collectAsStateWithLifecycle();val probing by probeModel.probeRunning.collectAsStateWithLifecycle()
+    LaunchedEffect(state.connected) {
+        if (state.connected) onRefreshIp()
+    }
     val order=(preferences.dashboardWidgetOrder+widgets).distinct().filter{it in widgets&&it !in preferences.dashboardCardHidden}
     LazyVerticalGrid(columns=GridCells.Adaptive(170.dp),state=listState,contentPadding=PaddingValues(20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item(span={GridItemSpan(maxLineSpan)}) {
@@ -85,7 +82,7 @@ private fun formatUptime(seconds:Long):String {
             var buttonCenter by remember { mutableStateOf<Offset?>(null) }
             val view = LocalView.current
             Surface(
-                color=if(state.connected)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape=RoundedCornerShape(28.dp),
                 modifier=Modifier.onGloballyPositioned {
                     cardPosition = it.positionInRoot()
@@ -139,56 +136,63 @@ private fun formatUptime(seconds:Long):String {
         if(state.error!=null)item(span={GridItemSpan(maxLineSpan)}){Text(state.error,color=MaterialTheme.colorScheme.error)}
         item(span={GridItemSpan(maxLineSpan)}) { Row(verticalAlignment=Alignment.CenterVertically){Text(text("Overview","概览"),Modifier.weight(1f),style=MaterialTheme.typography.titleLarge);TextButton(onClick={edit=true}){Icon(Icons.Default.Tune,null);Spacer(Modifier.width(4.dp));Text(text("Customize","自定义"))}} }
         items(order,key={it},span={key->GridItemSpan(if(preferences.dashboardWidgetSizes[key]=="Small"||key in listOf("memory","connections","traffic_total"))1 else maxLineSpan)}) { key ->
-            MetricCard(title=widgetTitle(key),icon=widgetIcon(key)) {
-                when(key) {
+            MetricCard(
+                title = widgetTitle(key),
+                icon = widgetIcon(key),
+                modifier = Modifier.height(150.dp),
+                onClick = when (key) {
+                    "connections" -> ({ onNavigate("connections") })
+                    "profile" -> ({ onNavigate("profiles") })
+                    "ip_info" -> ({ onNavigate("quality") })
+                    else -> null
+                },
+                trailing = if (key == "ip_info") {
+                    {
+                        IconButton(onClick = onRefreshIp) {
+                            Icon(Icons.Default.Refresh, text("Refresh", "刷新"), Modifier.size(18.dp))
+                        }
+                    }
+                } else null,
+                background = if (key == "ip_info") {
+                    {
+                        WorldMapBackground(
+                            latitude = state.ip?.latitude,
+                            longitude = state.ip?.longitude,
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+                } else ({}),
+            ) {
+                when (key) {
                     "traffic_total" -> {
-                        Text(bytes(state.totalUpload+state.totalDownload),style=MaterialTheme.typography.headlineMedium)
-                        MetricDetail(Icons.Default.Upload,text("Uploaded","累计上传"),bytes(state.totalUpload),tint=MaterialTheme.colorScheme.tertiary)
-                        MetricDetail(Icons.Default.Download,text("Downloaded","累计下载"),bytes(state.totalDownload),tint=MaterialTheme.colorScheme.primary)
+                        Text(bytes(state.totalUpload + state.totalDownload), style = MaterialTheme.typography.headlineSmall)
+                        MetricDetail(Icons.Default.Upload, text("Uploaded", "累计上传"), bytes(state.totalUpload), tint = MaterialTheme.colorScheme.tertiary)
+                        MetricDetail(Icons.Default.Download, text("Downloaded", "累计下载"), bytes(state.totalDownload), tint = MaterialTheme.colorScheme.primary)
                     }
                     "memory" -> {
-                        Text(if(state.connected)bytes(state.memory)else"—",style=MaterialTheme.typography.headlineMedium)
-                        Text(text("Clash memory","Clash 内存占用"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (state.connected) bytes(state.memory) else "—", style = MaterialTheme.typography.headlineSmall)
+                        Text(text("Clash memory", "Clash 内存占用"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     "connections" -> {
-                        Text(if(state.connected)state.connections.toString()else"—",style=MaterialTheme.typography.headlineMedium)
-                        Text(text("active connections","条活动连接"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick={onNavigate("connections")}){Icon(Icons.Default.ChevronRight,null);Text(text("Inspect","查看"))}
-                    }
-                    "providers" -> {
-                        Text(if(state.connected)state.providerCount.toString()else"—",style=MaterialTheme.typography.headlineMedium)
-                        Text(text("configured providers","个已配置 Provider"),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick={onNavigate("providers")}){Icon(Icons.Default.ChevronRight,null);Text(text("Manage","管理"))}
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(if (state.connected) state.connections.toString() else "—", style = MaterialTheme.typography.headlineSmall)
+                            Text(text("active connections", "条活动连接"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     "profile" -> {
-                        Text(state.active?.name?:text("No subscription selected","尚未选择订阅"),style=MaterialTheme.typography.titleLarge)
-                        state.active?.let{MetricDetail(Icons.Default.CheckCircle,text("Status","状态"),text("Active","当前使用"),tint=MaterialTheme.colorScheme.tertiary)}
-                        Button(onClick={onNavigate("profiles")}){Icon(Icons.Default.Subscriptions,null);Text(text("Subscriptions","订阅管理"))}
+                        Text(state.active?.name ?: text("No subscription selected", "尚未选择订阅"), style = MaterialTheme.typography.titleMedium)
+                        state.active?.let {
+                            MetricDetail(Icons.Default.CheckCircle, text("Status", "状态"), text("Active", "当前使用"), tint = MaterialTheme.colorScheme.tertiary)
+                        }
                     }
                     "ip_info" -> {
-                        Text(state.ip?.ip?:"—",style=MaterialTheme.typography.titleLarge)
-                        state.ip?.let{Text(listOfNotNull(it.country,it.city,it.isp).joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick=onRefreshIp){Icon(Icons.Default.Refresh,null);Text(text("Refresh","刷新"))}
-                            TextButton(onClick={onNavigate("quality")}){Icon(Icons.Default.VerifiedUser,null);Text(text("IP quality","IP 质量"))}
-                        }
-                    }
-                    "services" -> {
-                        probes.forEach{(name,result)->
-                            val(statusIcon,statusColor)=when{
-                                result==null->Icons.Default.CloudOff to MaterialTheme.colorScheme.onSurfaceVariant
-                                result.code in 200..299->Icons.Default.CheckCircle to MaterialTheme.colorScheme.tertiary
-                                else->Icons.Default.Warning to MaterialTheme.colorScheme.error
-                            }
-                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                                Icon(statusIcon,null,Modifier.size(16.dp),tint=statusColor)
-                                Text(name,Modifier.weight(1f))
-                                Text(if(result==null)text("Unavailable","不可用")else"HTTP ${result.code} · ${result.latency} ms",style=MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            TextButton(enabled=!probing,onClick={val selected=(preferences.probeServiceOrder+ProbeServices.names).distinct().filter{preferences.probeServiceOrder.isEmpty()||it in preferences.probeServiceEnabled};probeModel.probe(ProbeServices.ALL.filter{it.name in selected}.map{it.name to it.url})}){Icon(Icons.Default.NetworkCheck,null);Text(if(probing)text("Checking…","检测中…")else text("Check now","立即检测"))}
-                            TextButton(onClick={onNavigate("latency")}){Icon(Icons.Default.ChevronRight,null);Text(text("Details","详情"))}
+                        Text(state.ip?.ip ?: if (state.connected) text("Detecting…", "检测中…") else "—", style = MaterialTheme.typography.titleLarge)
+                        state.ip?.let {
+                            Text(
+                                listOfNotNull(it.country, it.city).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -264,6 +268,43 @@ private fun DrawScope.drawFluidBlob(
     }
     path.close()
     drawPath(path, color)
+}
+
+@Composable
+private fun WorldMapBackground(
+    latitude: Double?,
+    longitude: Double?,
+    modifier: Modifier = Modifier,
+) {
+    val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
+    val accent = MaterialTheme.colorScheme.primary
+    Canvas(modifier) {
+        val continents = listOf(
+            listOf(0.04f to 0.18f, 0.11f to 0.10f, 0.22f to 0.12f, 0.28f to 0.20f, 0.25f to 0.31f, 0.19f to 0.36f, 0.17f to 0.48f, 0.12f to 0.42f, 0.07f to 0.34f),
+            listOf(0.20f to 0.47f, 0.26f to 0.50f, 0.30f to 0.60f, 0.28f to 0.75f, 0.24f to 0.90f, 0.20f to 0.82f, 0.18f to 0.65f),
+            listOf(0.45f to 0.20f, 0.52f to 0.16f, 0.57f to 0.20f, 0.56f to 0.30f, 0.50f to 0.32f, 0.46f to 0.27f),
+            listOf(0.46f to 0.34f, 0.55f to 0.32f, 0.60f to 0.42f, 0.58f to 0.58f, 0.52f to 0.72f, 0.47f to 0.62f, 0.44f to 0.48f),
+            listOf(0.56f to 0.16f, 0.68f to 0.10f, 0.82f to 0.14f, 0.90f to 0.24f, 0.86f to 0.38f, 0.76f to 0.42f, 0.68f to 0.35f, 0.60f to 0.38f, 0.55f to 0.28f),
+            listOf(0.80f to 0.62f, 0.88f to 0.60f, 0.92f to 0.68f, 0.88f to 0.78f, 0.80f to 0.76f, 0.78f to 0.68f),
+            listOf(0.30f to 0.08f, 0.36f to 0.06f, 0.38f to 0.14f, 0.33f to 0.18f),
+        )
+        continents.forEach { points ->
+            val path = Path()
+            points.forEachIndexed { index, (x, y) ->
+                val px = x * size.width
+                val py = y * size.height
+                if (index == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            path.close()
+            drawPath(path, land)
+        }
+        if (latitude != null && longitude != null && latitude in -90.0..90.0 && longitude in -180.0..180.0) {
+            val x = ((longitude + 180.0) / 360.0).toFloat() * size.width
+            val y = ((90.0 - latitude) / 180.0).toFloat() * size.height
+            drawCircle(accent.copy(alpha = 0.18f), radius = 14.dp.toPx(), center = Offset(x, y))
+            drawCircle(accent, radius = 4.dp.toPx(), center = Offset(x, y))
+        }
+    }
 }
 
 @Composable
