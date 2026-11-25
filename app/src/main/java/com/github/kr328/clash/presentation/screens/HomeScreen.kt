@@ -79,10 +79,14 @@ private fun formatUptime(seconds:Long):String {
                 }
                 Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
                     Text(text("Routing mode","路由模式"),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                        listOf(TunnelState.Mode.Rule,TunnelState.Mode.Global,TunnelState.Mode.Direct).forEach{mode->
-                            FilterChip(state.mode==mode,{onMode(mode)},modifier=Modifier.weight(1f),label={Text(when(mode){TunnelState.Mode.Rule->text("Rule","规则");TunnelState.Mode.Global->text("Global","全局");else->text("Direct","直连")})})
-                        }
+                    val modes=listOf(TunnelState.Mode.Rule,TunnelState.Mode.Global,TunnelState.Mode.Direct)
+                    SecondaryScrollableTabRow(
+                        selectedTabIndex=modes.indexOf(state.mode).coerceAtLeast(0),
+                        containerColor=Color.Transparent,
+                        contentColor=MaterialTheme.colorScheme.primary,
+                        edgePadding=0.dp,
+                    ) {
+                        modes.forEach{mode->Tab(selected=state.mode==mode,onClick={onMode(mode)},text={Text(when(mode){TunnelState.Mode.Rule->text("Rule","规则");TunnelState.Mode.Global->text("Global","全局");else->text("Direct","直连")})})}
                     }
                 }
             }
