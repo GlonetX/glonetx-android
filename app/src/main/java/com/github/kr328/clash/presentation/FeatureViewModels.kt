@@ -21,6 +21,8 @@ class FeatureViewModel(application: Application, val saved: SavedStateHandle) : 
     val group = MutableStateFlow<ProxyGroup?>(null)
     val connections = MutableStateFlow<List<ConnectionItem>>(emptyList())
     val profile = MutableStateFlow<Profile?>(null)
+    private val _profileIntervalDraft = MutableStateFlow("")
+    val profileIntervalDraft = _profileIntervalDraft.asStateFlow()
     val committed = MutableStateFlow(false)
     val progress = MutableStateFlow<String?>(null)
     val files = MutableStateFlow<List<com.github.kr328.clash.design.model.File>>(emptyList())
@@ -44,19 +46,32 @@ class FeatureViewModel(application: Application, val saved: SavedStateHandle) : 
     fun loadProfile(id: String) = action {
         if(loadedProfile?.uuid?.toString()==id) return@action
         val original=repository.profile(id) ?: error("Profile no longer exists")
+        val interval=saved.get<Long>("profile.interval") ?: original.interval
         loadedProfile=original
-        profile.value=original.copy(name=saved["profile.name"] ?: original.name, source=saved["profile.source"] ?: original.source, interval=saved["profile.interval"] ?: original.interval)
+        _profileIntervalDraft.value=saved.get<String>("profile.intervalDraft") ?: (interval/60000).toString()
+        profile.value=original.copy(name=saved["profile.name"] ?: original.name, source=saved["profile.source"] ?: original.source, interval=interval)
     }
     fun editProfile(transform: (Profile) -> Profile) {
         val updated=profile.value?.let(transform) ?: return
         profile.value=updated
         saved["profile.name"]=updated.name; saved["profile.source"]=updated.source; saved["profile.interval"]=updated.interval
     }
+    fun isValidProfileInterval(value: String): Boolean =
+        value.toLongOrNull()?.let { it == 0L || it in 15L..525600L } == true
+    fun editProfileInterval(value: String) {
+        _profileIntervalDraft.value=value
+        saved["profile.intervalDraft"]=value
+        if (isValidProfileInterval(value)) {
+            editProfile { it.copy(interval=value.toLong()*60000L) }
+        }
+    }
     fun saveProfile() = action {
         val p=profile.value ?: return@action
         require(p.name.isNotBlank()) { "Name is required" }
         require(p.type==Profile.Type.File || p.source.isNotBlank()) { "URL is required" }
-        repository.save(p) { progress.value=it.toString() }
+        val intervalDraft=_profileIntervalDraft.value
+        require(isValidProfileInterval(intervalDraft)) { "Update interval must be 0 or between 15 and 525600 minutes" }
+        repository.save(p.copy(interval=intervalDraft.toLong()*60000L)) { progress.value=it.toString() }
         committed.value=true; progress.value=null
     }
     fun discardProfile(onDone: () -> Unit) = action { profile.value?.let { repository.release(it.uuid.toString()) }; onDone() }

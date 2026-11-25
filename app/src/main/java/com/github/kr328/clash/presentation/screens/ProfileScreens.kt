@@ -116,22 +116,36 @@ import java.util.Date
 }
 
 @Composable fun ProfileEditorScreen(id:String,onBack:()->Unit,onFiles:(String)->Unit,model:FeatureViewModel=viewModel()) {
-    val profile by model.profile.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();val done by model.committed.collectAsStateWithLifecycle();val progress by model.progress.collectAsStateWithLifecycle()
+    val profile by model.profile.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();val done by model.committed.collectAsStateWithLifecycle();val progress by model.progress.collectAsStateWithLifecycle();val intervalDraft by model.profileIntervalDraft.collectAsStateWithLifecycle()
     var confirmExit by remember{mutableStateOf(false)};var showSecret by remember{mutableStateOf(false)}
     var filesVisited by rememberSaveable(id) { mutableStateOf(false) }
     LaunchedEffect(id){model.loadProfile(id)};LaunchedEffect(done){if(done)onBack()}
     BackHandler { if(filesVisited || profile!=model.loadedProfile)confirmExit=true else model.discardProfile(onBack) }
     val p=profile
     if(p==null){if(error!=null)ErrorState(error!!){model.loadProfile(id)}else BusyState();return}
+    val intervalValid=model.isValidProfileInterval(intervalDraft)
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         item{OutlinedTextField(p.name,{s->model.editProfile{it.copy(name=s)}},Modifier.fillMaxWidth(),label={Text(text("Name","名称"))},enabled=!busy,singleLine=true)}
         if(p.type!=Profile.Type.File)item{OutlinedTextField(p.source,{s->model.editProfile{it.copy(source=s)}},Modifier.fillMaxWidth(),label={Text(text("Source URL","订阅地址"))},enabled=!busy)}
-        item{var interval by rememberSaveable(p.uuid.toString()){mutableStateOf((p.interval/60000).toString())};OutlinedTextField(interval,{s->interval=s;s.toLongOrNull()?.takeIf{it>=0&&it<=525600}?.let{n->model.editProfile{it.copy(interval=n*60000)}}},Modifier.fillMaxWidth(),label={Text(text("Update interval (minutes, 0 disables)","更新间隔（分钟，0 为关闭）"))},singleLine=true,enabled=!busy)}
+        item {
+            OutlinedTextField(
+                intervalDraft,
+                { model.editProfileInterval(it) },
+                Modifier.fillMaxWidth(),
+                label = { Text(text("Update interval (minutes, 0 disables)", "更新间隔（分钟，0 为关闭）")) },
+                supportingText = if (!intervalValid) {
+                    { Text(text("Enter 0 or 15 to 525600 minutes", "请输入 0 或 15 到 525600 分钟")) }
+                } else null,
+                isError = !intervalValid,
+                singleLine = true,
+                enabled = !busy
+            )
+        }
         item{OutlinedTextField(p.ageSecretKey.orEmpty(),{s->model.editProfile{it.copy(ageSecretKey=s.ifBlank{null})}},Modifier.fillMaxWidth(),label={Text(text("age decryption key","age 解密密钥"))},visualTransformation=if(showSecret)androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={IconButton(onClick={showSecret=!showSecret}){Icon(Icons.Default.Visibility,null)}},enabled=!busy)}
         item{InfoCard(text("Configuration and provider files","配置和 Provider 文件"),onClick={filesVisited=true;onFiles(id)},trailing={Icon(Icons.Default.FolderOpen,null)})}
         if(error!=null)item{ErrorState(error!!){model.error.value=null}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth());progress?.let{Text(it,style=MaterialTheme.typography.bodySmall)}}
-        item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){OutlinedButton(onClick={confirmExit=true},enabled=!busy,modifier=Modifier.weight(1f)){Text(text("Discard","放弃"))};Button(onClick={model.saveProfile()},enabled=!busy&&p.name.isNotBlank(),modifier=Modifier.weight(1f)){Text(text("Save and validate","保存并验证"))}}}
+        item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){OutlinedButton(onClick={confirmExit=true},enabled=!busy,modifier=Modifier.weight(1f)){Text(text("Discard","放弃"))};Button(onClick={model.saveProfile()},enabled=!busy&&p.name.isNotBlank()&&intervalValid,modifier=Modifier.weight(1f)){Text(text("Save and validate","保存并验证"))}}}
     }
     if(confirmExit)ConfirmDialog(text("Discard changes?","放弃修改？"),text("Your saved configuration will not be changed.","已保存的配置不会改变。"),{confirmExit=false}){confirmExit=false;model.discardProfile(onBack)}
 }
