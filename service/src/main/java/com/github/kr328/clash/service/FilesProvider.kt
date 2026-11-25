@@ -1,16 +1,16 @@
 package com.github.kr328.clash.service
 
-import com.github.kr328.clash.service.backup.DataMaintenanceCoordinator
-import android.os.Handler
-import android.os.Looper
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.os.Build
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import com.github.kr328.clash.common.util.PatternFileName
+import com.github.kr328.clash.service.backup.DataMaintenanceCoordinator
 import com.github.kr328.clash.service.document.*
 import kotlinx.coroutines.runBlocking
 import java.io.FileNotFoundException
@@ -75,6 +75,43 @@ class FilesProvider : DocumentsProvider() {
         }
     }
 
+    override fun createDocument(
+        parentDocumentId: String?,
+        mimeType: String?,
+        displayName: String?
+    ): String {
+        val name = displayName ?: ""
+
+        if (!PatternFileName.matches(name) || name == "." || name == "..")
+            throw IllegalArgumentException("invalid name $displayName")
+
+        if (mimeType == D.MIME_TYPE_DIR)
+            throw IllegalArgumentException("directories are not supported")
+
+        return runBlocking {
+            DataMaintenanceCoordinator.exclusive(context!!) {
+                val path = Paths.resolve(parentDocumentId ?: "/")
+                val parent = picker.pick(path, true)
+
+                require(parent is FileDocument) {
+                    throw FileNotFoundException("invalid parent $parentDocumentId")
+                }
+                require(parent.file.isDirectory) {
+                    throw FileNotFoundException("invalid parent $parentDocumentId")
+                }
+
+                val file = parent.file.resolve(name)
+
+                if (file.exists())
+                    throw FileNotFoundException("$name already exists")
+                if (!file.createNewFile())
+                    throw FileNotFoundException("unable to create $name")
+
+                path.copy(relative = (path.relative ?: emptyList()) + name).toString()
+            }
+        }
+    }
+
     override fun deleteDocument(documentId: String?) {
         val documentPath = documentId ?: "/"
 
@@ -122,7 +159,8 @@ class FilesProvider : DocumentsProvider() {
                 throw IllegalArgumentException("unable to rename $document")
             }
 
-            document.file.renameTo(parent.resolve(name))
+            if (!document.file.renameTo(parent.resolve(name)))
+                throw FileNotFoundException("unable to rename $documentId")
 
             path.copy(relative = path.relative.dropLast(1) + name).toString()
 

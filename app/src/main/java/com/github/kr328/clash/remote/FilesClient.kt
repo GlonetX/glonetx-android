@@ -9,6 +9,7 @@ import com.github.kr328.clash.design.model.File
 import com.github.kr328.clash.util.copyContentTo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.FileNotFoundException
 import android.provider.DocumentsContract as DC
 
 class FilesClient(private val context: Context) {
@@ -42,6 +43,7 @@ class FilesClient(private val context: Context) {
         val uri = buildDocumentUri(documentId)
 
         DC.renameDocument(context.contentResolver, uri, name)
+            ?: throw FileNotFoundException("unable to rename $documentId to $name")
     }
 
     suspend fun deleteDocument(documentId: String) = withContext(Dispatchers.IO) {
@@ -55,7 +57,13 @@ class FilesClient(private val context: Context) {
         source: Uri,
         name: String
     ) = withContext(Dispatchers.IO) {
-        val target = buildDocumentUri("$parentDocumentId/$name")
+        val parent = buildDocumentUri(parentDocumentId)
+        val target = DC.createDocument(
+            context.contentResolver,
+            parent,
+            "application/octet-stream",
+            name
+        ) ?: throw FileNotFoundException("unable to create $name in $parentDocumentId")
 
         context.contentResolver.copyContentTo(source, target)
     }
