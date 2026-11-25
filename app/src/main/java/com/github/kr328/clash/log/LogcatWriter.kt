@@ -91,6 +91,7 @@ class LogcatWriter(context: Context) : AutoCloseable {
 
             // Keep logging into a file with the current name, even if the
             // rotation only partially completed.
+            runCatching { writer.close() }
             runCatching {
                 writer = openWriter(file)
 
