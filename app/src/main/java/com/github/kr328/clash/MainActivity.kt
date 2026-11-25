@@ -182,8 +182,28 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             notification.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
+    var pendingLocationPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
     val location = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
-        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] != true) model.message("Location permission is required to identify Wi-Fi networks")
+        val callback = pendingLocationPermission
+        pendingLocationPermission = null
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+            callback?.invoke()
+        } else {
+            model.message("Location permission is required to identify Wi-Fi networks")
+        }
+    }
+    fun requestLocationPermission(onGranted: () -> Unit) {
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            onGranted()
+            return
+        }
+        pendingLocationPermission = onGranted
+        runCatching {
+            location.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }.onFailure {
+            pendingLocationPermission = null
+            model.message(it.message ?: "Unable to request location permission")
+        }
     }
     val vpn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -278,7 +298,7 @@ class MainActivity : ComponentActivity() {
                     SettingsScreen(page, snapshot, model::updateRuntime, model::updateUi, ::navigate,
                         onCheckUpdate = { checkUpdate(true) },
                         onBatterySettings = { runCatching { activity.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }.onFailure { model.message(it.message ?: "Unable to open battery settings") } },
-                        onPermission = { if (ContextCompat.checkSelfPermission(activity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) location.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) })
+                        onPermission = { onGranted -> requestLocationPermission(onGranted) })
                 } }
                 composable("profiles") { ProfilesScreen({ nav.navigate("edit/$it") }, { nav.navigate("new-profile") }, prefs, model::updateUi) }
                 composable("new-profile") { NewProfileScreen({ nav.navigate("edit/$it") }, { scan.launch(null) }, { file.launch(arrayOf("*/*")) }, { runCatching { external.launch(Intent(Intents.ACTION_PROVIDE_URL)) }.onFailure { model.message(it.message ?: "No profile providers installed") } }) }

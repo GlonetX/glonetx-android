@@ -21,7 +21,7 @@ fun SettingsScreen(
     onUi: ((UiPreferences) -> UiPreferences) -> Unit,
     onNavigate: (String) -> Unit,
     onCheckUpdate: () -> Unit,
-    onPermission: () -> Unit,
+    onPermission: (() -> Unit) -> Unit,
     onBatterySettings: () -> Unit = {},
 ) {
     if (snapshot == null) { LinearProgressIndicator(Modifier.fillMaxWidth()); return }
@@ -115,13 +115,16 @@ fun SettingsScreen(
                 } }
                 item { SettingSection(stringResource(R.string.cs_wifi)) {
                     SettingChoice(stringResource(R.string.cs_wifi_action), r.wifiNetworkAction, listOf(WifiNetworkAction.Disabled to stringResource(R.string.cs_disabled), WifiNetworkAction.Pause to stringResource(R.string.cs_pause), WifiNetworkAction.Direct to stringResource(R.string.cs_direct))) { value ->
-                        if(value != WifiNetworkAction.Disabled) onPermission()
-                        onRuntime { it.copy(wifiNetworkAction = value) }
+                        if (value == WifiNetworkAction.Disabled) {
+                            onRuntime { it.copy(wifiNetworkAction = value) }
+                        } else {
+                            onPermission { onRuntime { it.copy(wifiNetworkAction = value) } }
+                        }
                     }
                     Text(stringResource(R.string.cs_wifi_summary), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
                     SettingText(stringResource(R.string.cs_ssids), r.wifiSsidList.joinToString("\n")) { value -> onRuntime { it.copy(wifiSsidList = value.lines().map(String::trim).filter(String::isNotEmpty).toSet()) } }
                     snapshot.policyReason?.let { Text(it, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
-                    SettingAction(stringResource(R.string.cs_permissions), onClick = onPermission)
+                    SettingAction(stringResource(R.string.cs_permissions), onClick = { onPermission {} })
                 } }
                 item { SettingSection(stringResource(R.string.cs_logging)) {
                     SettingNumber(stringResource(R.string.cs_retention), r.logRetentionDays, 1..365) { value -> onRuntime { it.copy(logRetentionDays = value) } }
