@@ -1,4 +1,8 @@
 name: Build Debug
+
+permissions:
+  contents: read
+
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -52,12 +56,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v6
 
-      - name: Checkout deploy key
+      # Read-only deploy key for the private glonetx-core submodule.
+      # Configure this as a GitHub deploy key with write access disabled.
+      - name: Checkout read-only submodule deploy key
         env:
-          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_KEY_READONLY: ${{ secrets.DEPLOY_KEY_READONLY }}
         run: |
-          touch id_ed25519
-          echo "$DEPLOY_KEY" > id_ed25519
+          umask 077
+          test -n "$DEPLOY_KEY_READONLY" || { echo "Missing DEPLOY_KEY_READONLY" >&2; exit 1; }
+          printf '%s\n' "$DEPLOY_KEY_READONLY" > id_ed25519
           chmod 600 ./id_ed25519
 
       - name: Checkout submodules
@@ -65,12 +72,6 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add ./id_ed25519
           git submodule update --init --recursive --force
-
-      - name: Restore signing keystore
-        env:
-          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
-        run: |
-          echo "$SIGNING_KEYSTORE" | base64 --decode > release.keystore
 
       - name: Setup Java
         uses: actions/setup-java@v5
