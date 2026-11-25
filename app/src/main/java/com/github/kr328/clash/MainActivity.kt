@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -226,6 +227,7 @@ class MainActivity : ComponentActivity() {
     val localizedContext = remember(currentContext, localizedConfiguration) { currentContext.createConfigurationContext(localizedConfiguration) }
     fun selectDestination(target: String) { nav.navigate(target) { popUpTo("home") { saveState = true }; launchSingleTop = true; restoreState = true } }
     CompositionLocalProvider(
+        LocalActivityResultRegistryOwner provides activity,
         LocalConfiguration provides localizedConfiguration,
         LocalContext provides localizedContext,
         LocalDensity provides Density(density.density, density.fontScale * prefs.textScale / 100f),
