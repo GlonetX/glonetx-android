@@ -32,10 +32,9 @@ import com.github.kr328.clash.service.settings.*
 import com.github.kr328.clash.design.model.ProbeServices
 import java.util.Locale
 
-private val widgets = listOf("outbound_mode", "traffic_chart", "traffic_total", "memory", "connections", "uptime", "services", "providers", "ip_info", "profile")
-@Composable private fun widgetTitle(key:String):String = when(key){"outbound_mode"->text("Routing mode","路由模式");"traffic_chart"->text("Network activity","网络活动");"traffic_total"->text("Transferred","累计流量");"memory"->text("Memory","内存");"connections"->text("Connections","连接");"uptime"->text("Connected for","运行时长");"services"->text("Service availability","服务可用性");"providers"->text("Providers","Providers");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
+private val widgets = listOf("traffic_chart", "traffic_total", "memory", "connections", "uptime", "services", "providers", "ip_info", "profile")
+@Composable private fun widgetTitle(key:String):String = when(key){"traffic_chart"->text("Network activity","网络活动");"traffic_total"->text("Transferred","累计流量");"memory"->text("Memory","内存");"connections"->text("Connections","连接");"uptime"->text("Connected for","运行时长");"services"->text("Service availability","服务可用性");"providers"->text("Providers","Providers");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
 @Composable private fun widgetIcon(key:String):ImageVector = when(key){
-    "outbound_mode"->Icons.Default.AccountTree
     "traffic_chart"->Icons.Default.ShowChart
     "traffic_total"->Icons.Default.SwapVert
     "memory"->Icons.Default.Memory
@@ -78,6 +77,14 @@ private fun formatUptime(seconds:Long):String {
                     RateMetric(Icons.Default.Download,text("Download","下载"),"${bytes(state.download)}/s",MaterialTheme.colorScheme.primary)
                     RateMetric(Icons.Default.Upload,text("Upload","上传"),"${bytes(state.upload)}/s",MaterialTheme.colorScheme.tertiary)
                 }
+                Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                    Text(text("Routing mode","路由模式"),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        listOf(TunnelState.Mode.Rule,TunnelState.Mode.Global,TunnelState.Mode.Direct).forEach{mode->
+                            FilterChip(state.mode==mode,{onMode(mode)},modifier=Modifier.weight(1f),label={Text(when(mode){TunnelState.Mode.Rule->text("Rule","规则");TunnelState.Mode.Global->text("Global","全局");else->text("Direct","直连")})})
+                        }
+                    }
+                }
             }
         } }
         if(state.error!=null)item(span={GridItemSpan(maxLineSpan)}){Text(state.error,color=MaterialTheme.colorScheme.error)}
@@ -85,7 +92,6 @@ private fun formatUptime(seconds:Long):String {
         items(order,key={it},span={key->GridItemSpan(if(preferences.dashboardWidgetSizes[key]=="Small"||key in listOf("memory","connections","uptime","traffic_total"))1 else maxLineSpan)}) { key ->
             MetricCard(title=widgetTitle(key),icon=widgetIcon(key)) {
                 when(key) {
-                    "outbound_mode" -> Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf(TunnelState.Mode.Rule,TunnelState.Mode.Global,TunnelState.Mode.Direct).forEach{mode->FilterChip(state.mode==mode,{onMode(mode)},label={Text(when(mode){TunnelState.Mode.Rule->text("Rule","规则");TunnelState.Mode.Global->text("Global","全局");else->text("Direct","直连")})})}}
                     "traffic_chart" -> {
                         val interval=if(preferences.lightweightMode)5 else 1
                         val effectiveWindow=if(preferences.lightweightMode)window.coerceAtMost(300)else window
