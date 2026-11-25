@@ -29,9 +29,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import com.github.kr328.clash.remote.Remote
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +50,7 @@ import com.github.kr328.clash.core.bridge.Bridge
 import com.github.kr328.clash.presentation.AppViewModel
 import com.github.kr328.clash.presentation.screens.*
 import com.github.kr328.clash.service.model.Profile
+import com.github.kr328.clash.service.settings.RuntimePhase
 import com.github.kr328.clash.util.startClashService
 import com.github.kr328.clash.util.stopClashService
 import com.github.kr328.clash.util.AppUpdate
@@ -205,11 +210,9 @@ class MainActivity : ComponentActivity() {
             model.message(it.message ?: "Unable to request location permission")
         }
     }
+    var pendingVpnConsent by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
     val vpn = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            activity.startClashService()
-            requestNotification()
-        } else model.message("VPN permission denied")
+        pendingVpnConsent?.complete(result.resultCode == Activity.RESULT_OK)
     }
     val scan = rememberLauncherForActivityResult(ScanQRCode()) { result ->
         if (result is QRResult.QRSuccess) {
@@ -241,15 +244,112 @@ class MainActivity : ComponentActivity() {
             nav.navigate("edit/$id")
         }
     }
+    suspend fun startClashWithConsent(): Boolean {
+        val request = try {
+            activity.startClashService()
+        } catch (e: Exception) {
+            model.message(e.message ?: "Unable to start VPN")
+            return false
+        }
+        if (request == null) return true
+
+        val consent = CompletableDeferred<Boolean>()
+        pendingVpnConsent = consent
+        val launched = runCatching { vpn.launch(request) }
+        if (launched.isFailure) {
+            pendingVpnConsent = null
+            model.message(launched.exceptionOrNull()?.message ?: "Unable to request VPN permission")
+            return false
+        }
+
+        return try {
+            when (val granted = withTimeoutOrNull(30_000) { consent.await() }) {
+                null -> {
+                    model.message("Timed out waiting for VPN permission")
+                    false
+                }
+                false -> {
+                    model.message("VPN permission denied")
+                    false
+                }
+                true -> try {
+                    if (activity.startClashService() == null) true
+                    else {
+                        model.message("VPN permission is still required")
+                        false
+                    }
+                } catch (e: Exception) {
+                    model.message(e.message ?: "Unable to start VPN")
+                    false
+                }
+            }
+        } finally {
+            pendingVpnConsent = null
+        }
+    }
     fun toggle() {
         if (home.connected) activity.stopClashService()
         else if (home.active?.imported != true) model.message("Select a valid subscription first")
-        else runCatching {
-            val request = activity.startClashService()
-            if (request != null) vpn.launch(request) else requestNotification()
-        }.onFailure { model.message(it.message ?: "Unable to start VPN") }
+        else model.launchAction {
+            if (startClashWithConsent()) requestNotification()
+        }
     }
-    fun navigate(route: String) { if (route == "reconnect") { if(home.connected) activity.stopClashService(); model.message("Reconnect to apply settings") } else nav.navigate(route) }
+    var reconnecting by remember { mutableStateOf(false) }
+    fun reconnect() {
+        if (reconnecting) return
+        reconnecting = true
+        model.launchAction {
+            try {
+                val active = withContext(Dispatchers.IO) { model.repository.activeProfile() }
+                if (active?.imported != true) {
+                    model.message("Select a valid subscription first")
+                    return@launchAction
+                }
+                val beforeStop = model.settings.value
+                if (beforeStop == null) {
+                    model.message("Settings are not available yet")
+                    return@launchAction
+                }
+                if (beforeStop.phase != RuntimePhase.Stopped && beforeStop.phase != RuntimePhase.Failed) {
+                    activity.stopClashService()
+                    val stopped = withTimeoutOrNull(15_000) {
+                        model.settings.first { it?.phase == RuntimePhase.Stopped || it?.phase == RuntimePhase.Failed }
+                    }
+                    if (stopped == null) {
+                        model.message("Timed out waiting for VPN to stop")
+                        return@launchAction
+                    }
+                }
+
+                val previousGeneration = model.settings.value?.runtimeGeneration ?: beforeStop.runtimeGeneration
+                if (!startClashWithConsent()) return@launchAction
+                requestNotification()
+
+                val started = withTimeoutOrNull(30_000) {
+                    model.settings.first { snapshot ->
+                        snapshot != null && snapshot.runtimeGeneration != previousGeneration &&
+                            (snapshot.phase == RuntimePhase.Running || snapshot.phase == RuntimePhase.Failed)
+                    }
+                }
+                if (started == null) {
+                    model.message("Timed out waiting for VPN to start")
+                } else if (started.phase == RuntimePhase.Failed) {
+                    model.message("Unable to start VPN: ${started.lastError ?: "service failed"}")
+                } else {
+                    model.message("Reconnected to apply settings")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                model.message(e.message ?: "Unable to reconnect VPN")
+            } finally {
+                reconnecting = false
+            }
+        }
+    }
+    fun navigate(route: String) {
+        if (route == "reconnect") reconnect() else nav.navigate(route)
+    }
     fun openLink(url: String) {
         runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
             .onFailure { model.message("No browser available") }
