@@ -16,14 +16,17 @@ message(STATUS "git hash= ${COMMIT_HASH}")
 
 # 获取分支名称
 execute_process(
-  COMMAND git submodule foreach git branch -r --contains ${COMMIT_HASH}
+  COMMAND git submodule foreach git rev-parse --abbrev-ref HEAD
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} 
   OUTPUT_VARIABLE CURRENT_BRANCH
 )
 string(REPLACE "\n" ";" CURRENT_BRANCH "${CURRENT_BRANCH}")
 list(GET CURRENT_BRANCH 1 CURRENT_BRANCH)
-string (REGEX REPLACE "origin/" "" CURRENT_BRANCH ${CURRENT_BRANCH})
-string (REGEX REPLACE "[\n\t\r]" "" CURRENT_BRANCH ${CURRENT_BRANCH})
+if(NOT CURRENT_BRANCH)
+  set(CURRENT_BRANCH "unknown")
+endif()
+string (REGEX REPLACE "origin/" "" CURRENT_BRANCH "${CURRENT_BRANCH}")
+string (REGEX REPLACE "[\n\t\r]" "" CURRENT_BRANCH "${CURRENT_BRANCH}")
 #string(SUBSTRING ${CURRENT_BRANCH} 0 8 CURRENT_BRANCH)
 message(STATUS "git current branch = ${CURRENT_BRANCH}")
 
