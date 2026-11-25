@@ -305,6 +305,7 @@ class SettingsManager private constructor(private val context: Context) : ISetti
             if (a.tunMtu != b.tunMtu) add("tunMtu")
             if (a.keepAliveEnabled != b.keepAliveEnabled || a.keepAliveInterval != b.keepAliveInterval || a.keepAliveIdle != b.keepAliveIdle) add("keepAlive")
             if (a.storeFakeIp != b.storeFakeIp) add("storeFakeIp")
+            if (a.globalUserAgent != b.globalUserAgent) add("globalUserAgent")
         }
         private fun runtimeForNative(r: RuntimeSettings, downloadOnly: Boolean = false): NativeRuntimeSettings =
             NativeRuntimeSettings(r.keepAliveEnabled, r.keepAliveInterval, r.keepAliveIdle, r.storeFakeIp, r.globalUserAgent, downloadOnly)
