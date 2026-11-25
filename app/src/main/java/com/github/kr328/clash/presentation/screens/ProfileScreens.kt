@@ -43,7 +43,7 @@ import java.util.Date
     LazyColumn(Modifier.fillMaxSize(), contentPadding=PaddingValues(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
         item { Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(query,{query=it},Modifier.weight(1f),label={Text(text("Search subscriptions","搜索订阅"))},singleLine=true); IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))} } }
         item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(enabled = !busy, onClick = { model.action {
+            TextButton(enabled = !busy && profiles.any { it.imported && it.type != Profile.Type.File }, onClick = { model.action {
                 profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
                 model.loadProfiles()
             } }) { Text(text("Update all", "全部更新")) }
@@ -53,7 +53,7 @@ import java.util.Date
         if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
         items(profiles.filter { p -> val annotation=preferences.subscriptionMetadata[p.uuid.toString()]; p.name.contains(query,true) || annotation?.tag?.contains(query,true)==true || annotation?.note?.contains(query,true)==true },key={it.uuid.toString()}) { p ->
             ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(p.name,style=MaterialTheme.typography.titleLarge); Text(p.type.name,style=MaterialTheme.typography.labelMedium) }; RadioButton(p.active,onClick={model.action{model.repository.activate(p);model.loadProfiles()}}) }
+                Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(p.name,style=MaterialTheme.typography.titleLarge); Text(p.type.name,style=MaterialTheme.typography.labelMedium) }; RadioButton(p.active,enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}}) }
                 preferences.subscriptionMetadata[p.uuid.toString()]?.let { annotation ->
                     if (annotation.tag.isNotBlank()) Text(annotation.tag, style=MaterialTheme.typography.labelMedium)
                     if (annotation.note.isNotBlank()) Text(annotation.note, style=MaterialTheme.typography.bodySmall)
@@ -62,7 +62,7 @@ import java.util.Date
                 if(p.total>0) { Text("${bytes(p.upload+p.download)} / ${bytes(p.total)}"); LinearProgressIndicator(progress={((p.upload+p.download).toFloat()/p.total).coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth()) }
                 if(p.expire>0) Text(text("Expires: ","到期：")+DateFormat.getDateInstance().format(Date(p.expire)))
                 if(p.updatedAt>0) Text(text("Updated: ","更新：")+DateFormat.getDateTimeInstance().format(Date(p.updatedAt)),style=MaterialTheme.typography.bodySmall)
-                Row { TextButton(onClick={onEdit(p.uuid.toString())}){Text(text("Edit","编辑"))}; TextButton(enabled=!busy,onClick={model.action{model.repository.update(p);model.loadProfiles()}}){Text(text("Update","更新"))}; IconButton(onClick={model.action{onEdit(model.repository.clone(p))}}){Icon(Icons.Default.ContentCopy,text("Duplicate","复制"))}; IconButton(onClick={sharing=p},enabled=p.type==Profile.Type.Url && p.source.isNotBlank()){Icon(Icons.Default.QrCode,text("Share QR code","分享二维码"))}; IconButton(onClick={deleting=p}){Icon(Icons.Default.Delete,text("Delete","删除"))} }
+                Row { TextButton(onClick={onEdit(p.uuid.toString())}){Text(text("Edit","编辑"))}; TextButton(enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={model.action{model.repository.update(p);model.loadProfiles()}}){Text(text("Update","更新"))}; IconButton(onClick={model.action{onEdit(model.repository.clone(p))}},enabled=!busy&&p.imported){Icon(Icons.Default.ContentCopy,text("Duplicate","复制"))}; IconButton(onClick={sharing=p},enabled=p.type==Profile.Type.Url && p.source.isNotBlank()){Icon(Icons.Default.QrCode,text("Share QR code","分享二维码"))}; IconButton(onClick={deleting=p}){Icon(Icons.Default.Delete,text("Delete","删除"))} }
             } }
         }
     }
