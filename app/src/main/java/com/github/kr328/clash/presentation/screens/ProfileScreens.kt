@@ -41,28 +41,40 @@ import java.util.Date
     val clipboard = LocalClipboardManager.current
     LaunchedEffect(Unit) { model.loadProfiles() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding=PaddingValues(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item { Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(query,{query=it},Modifier.weight(1f),label={Text(text("Search subscriptions","搜索订阅"))},singleLine=true); IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))} } }
+        item { Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(query,{query=it},Modifier.weight(1f),label={Text(text("Search subscriptions","搜索订阅"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)}); IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))} } }
+        item { val active=profiles.count{it.active};InfoCard(text("Subscriptions","订阅"),"${profiles.size} ${text("total","个")} · $active ${text("active","个启用")}",icon=Icons.Default.Subscriptions) }
         item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(enabled = !busy && profiles.any { it.imported && it.type != Profile.Type.File }, onClick = { model.action {
                 profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
                 model.loadProfiles()
-            } }) { Text(text("Update all", "全部更新")) }
+            } }) { Icon(Icons.Default.Refresh,null);Text(text("Update all", "全部更新")) }
         } }
         if(error!=null) item { ErrorState(error!!){model.loadProfiles()} }
         if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
         items(profiles.filter { p -> val annotation=preferences.subscriptionMetadata[p.uuid.toString()]; p.name.contains(query,true) || annotation?.tag?.contains(query,true)==true || annotation?.note?.contains(query,true)==true },key={it.uuid.toString()}) { p ->
             ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(p.name,style=MaterialTheme.typography.titleLarge); Text(p.type.name,style=MaterialTheme.typography.labelMedium) }; RadioButton(p.active,enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}}) }
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Icon(when(p.type){Profile.Type.Url->Icons.Default.Link;Profile.Type.File->Icons.Default.Description;else->Icons.Default.Extension},null,Modifier.size(24.dp),tint=MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) { Text(p.name,style=MaterialTheme.typography.titleLarge); Text(when(p.type){Profile.Type.Url->text("Link","链接");Profile.Type.File->text("Local file","本地文件");else->text("External provider","外部 Provider")},style=MaterialTheme.typography.labelMedium) }
+                    if(p.active)Text(text("Active","当前使用"),style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.tertiary)
+                    RadioButton(p.active,enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}})
+                }
                 preferences.subscriptionMetadata[p.uuid.toString()]?.let { annotation ->
-                    if (annotation.tag.isNotBlank()) Text(annotation.tag, style=MaterialTheme.typography.labelMedium)
-                    if (annotation.note.isNotBlank()) Text(annotation.note, style=MaterialTheme.typography.bodySmall)
+                    if (annotation.tag.isNotBlank()) Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){Icon(Icons.Default.Label,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.primary);Text(annotation.tag,style=MaterialTheme.typography.labelMedium)}
+                    if (annotation.note.isNotBlank()) Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){Icon(Icons.Default.Notes,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Text(annotation.note,style=MaterialTheme.typography.bodySmall)}
                 }
                 TextButton(onClick={annotating=p}) { Text(text("Tag and note", "标签和备注")) }
-                if(p.total>0) { Text("${bytes(p.upload+p.download)} / ${bytes(p.total)}"); LinearProgressIndicator(progress={((p.upload+p.download).toFloat()/p.total).coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth()) }
-                if(p.expire>0) Text(text("Expires: ","到期：")+DateFormat.getDateInstance().format(Date(p.expire)))
-                if(p.updatedAt>0) Text(text("Updated: ","更新：")+DateFormat.getDateTimeInstance().format(Date(p.updatedAt)),style=MaterialTheme.typography.bodySmall)
-                Row { TextButton(onClick={onEdit(p.uuid.toString())}){Text(text("Edit","编辑"))}; TextButton(enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={model.action{model.repository.update(p);model.loadProfiles()}}){Text(text("Update","更新"))}; IconButton(onClick={model.action{onEdit(model.repository.clone(p))}},enabled=!busy&&p.imported){Icon(Icons.Default.ContentCopy,text("Duplicate","复制"))}; IconButton(onClick={sharing=p},enabled=p.type==Profile.Type.Url && p.source.isNotBlank()){Icon(Icons.Default.QrCode,text("Share QR code","分享二维码"))}; IconButton(onClick={deleting=p}){Icon(Icons.Default.Delete,text("Delete","删除"))} }
+                if(p.total>0) {
+                    val used=p.upload+p.download
+                    val percent=((used.toDouble()/p.total)*100).toInt().coerceIn(0,100)
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){Icon(Icons.Default.DataUsage,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.primary);Text("${text("Traffic","流量")} ${bytes(used)} / ${bytes(p.total)} · $percent%",style=MaterialTheme.typography.bodySmall)}
+                    LinearProgressIndicator(progress={((used.toFloat()/p.total).coerceIn(0f,1f))},modifier=Modifier.fillMaxWidth())
+                }
+                if(p.expire>0) MetricDetail(Icons.Default.Event,text("Expires","到期"),DateFormat.getDateInstance().format(Date(p.expire)))
+                if(p.updatedAt>0) MetricDetail(Icons.Default.Update,text("Updated","更新"),DateFormat.getDateTimeInstance().format(Date(p.updatedAt)))
+                Row { TextButton(onClick={onEdit(p.uuid.toString())}){Icon(Icons.Default.Edit,null);Text(text("Edit","编辑"))}; TextButton(enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={model.action{model.repository.update(p);model.loadProfiles()}}){Icon(Icons.Default.Refresh,null);Text(text("Update","更新"))}; IconButton(onClick={model.action{onEdit(model.repository.clone(p))}},enabled=!busy&&p.imported){Icon(Icons.Default.ContentCopy,text("Duplicate","复制"))}; IconButton(onClick={sharing=p},enabled=p.type==Profile.Type.Url && p.source.isNotBlank()){Icon(Icons.Default.QrCode,text("Share QR code","分享二维码"))}; IconButton(onClick={deleting=p}){Icon(Icons.Default.Delete,text("Delete","删除"))} }
             } }
         }
     }
@@ -108,10 +120,10 @@ import java.util.Date
         item{Button(enabled=!busy&&url.isNotBlank(),onClick={model.action{onCreated(model.repository.create(Profile.Type.Url,name.ifBlank{"Subscription"},url.trim()))}},modifier=Modifier.fillMaxWidth()){Text(text("Continue","继续"))}}
         if(error!=null)item{ErrorState(error!!){model.error.value=null}}
         item{SectionTitle(text("Other sources","其他来源"))}
-        item{InfoCard(text("Scan QR code","扫描二维码"),onClick=onScan,trailing={Icon(Icons.Default.QrCodeScanner,null)})}
-        item{InfoCard(text("Import a configuration file","导入配置文件"),onClick=onImportFile,trailing={Icon(Icons.Default.FolderOpen,null)})}
-        item{InfoCard(text("Create local configuration","新建本地配置"),onClick={model.action{onCreated(model.repository.create(Profile.Type.File,name.ifBlank{"Local configuration"}))}})}
-        item{InfoCard(text("External profile providers","外部配置提供程序"),onClick=onExternal)}
+        item{InfoCard(text("Scan QR code","扫描二维码"),onClick=onScan,icon=Icons.Default.QrCodeScanner)}
+        item{InfoCard(text("Import a configuration file","导入配置文件"),onClick=onImportFile,icon=Icons.Default.FolderOpen)}
+        item{InfoCard(text("Create local configuration","新建本地配置"),onClick={model.action{onCreated(model.repository.create(Profile.Type.File,name.ifBlank{"Local configuration"}))}},icon=Icons.Default.NoteAdd)}
+        item{InfoCard(text("External profile providers","外部配置提供程序"),onClick=onExternal,icon=Icons.Default.Extension)}
     }
 }
 

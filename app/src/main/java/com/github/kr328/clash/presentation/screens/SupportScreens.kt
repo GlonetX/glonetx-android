@@ -5,8 +5,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -21,13 +23,14 @@ fun HelpScreen(onOpenUrl: (String) -> Unit) {
         R.string.clash_meta_for_android to R.string.meta_github_url,
         R.string.reforged_by_glonetx to R.string.glonetx_url,
     )
+    val linkIcons = listOf(Icons.Default.MenuBook,Icons.Default.MenuBook,Icons.Default.Code,Icons.Default.Code,Icons.Default.Language)
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text(stringResource(R.string.tips_help), style = MaterialTheme.typography.bodyLarge) }
-        links.forEach { (title, url) ->
+        item { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Info,null,tint=MaterialTheme.colorScheme.primary);Text(stringResource(R.string.tips_help), style = MaterialTheme.typography.bodyLarge)} }
+        links.forEachIndexed { index,(title, url) ->
             item(key = title) {
                 val target = stringResource(url)
                 Card(onClick = { onOpenUrl(target) }, modifier = Modifier.fillMaxWidth()) {
-                    ListItem(headlineContent = { Text(stringResource(title)) }, supportingContent = { Text(target) })
+                    ListItem(headlineContent = { Text(stringResource(title)) }, supportingContent = { Text(target) }, leadingContent = { Icon(linkIcons[index], contentDescription = null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = { Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) })
                 }
             }
         }
@@ -39,7 +42,7 @@ fun AboutScreen(version: String, onOpenUrl: (String) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("GlonetX", style = MaterialTheme.typography.headlineLarge)
-            Text(version, style = MaterialTheme.typography.labelLarge)
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){Icon(Icons.Default.Info,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.primary);Text("${text("Version","版本")} $version", style = MaterialTheme.typography.labelLarge)}
         }
         HelpScreen(onOpenUrl)
     }
@@ -60,8 +63,9 @@ fun SupportScaffold(title: String, onBack: () -> Unit, content: @Composable () -
 @Composable
 fun CrashScreen(logs: String?, onShare: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(com.github.kr328.clash.R.string.support_crash_description))
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.ReportProblem,null,tint=MaterialTheme.colorScheme.error);Text(stringResource(com.github.kr328.clash.R.string.support_crash_description))}
         Button(onClick = onShare, enabled = !logs.isNullOrEmpty()) {
+            Icon(Icons.Default.Share,null)
             Text(stringResource(com.github.kr328.clash.R.string.support_share_logs))
         }
         if (logs == null) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -74,8 +78,9 @@ fun CrashScreen(logs: String?, onShare: () -> Unit) {
 @Composable
 fun BrokenInstallationScreen(onOpenUrl: (String) -> Unit) {
     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Text(stringResource(R.string.application_broken_tips), style = MaterialTheme.typography.bodyLarge)
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Warning,null,tint=MaterialTheme.colorScheme.error);Text(stringResource(R.string.application_broken_tips), style = MaterialTheme.typography.bodyLarge)}
         Button(onClick = { onOpenUrl("https://github.com/GlonetX/glonetx-android/releases") }) {
+            Icon(Icons.Default.OpenInNew,null)
             Text(stringResource(R.string.github_releases))
         }
     }
