@@ -38,17 +38,27 @@ fun SettingsScreen(
         }
         snapshot.lastError?.let { error -> item { Text(error, color = MaterialTheme.colorScheme.error) } }
         when(page) {
-            "settings" -> item {
-                SettingSection(stringResource(R.string.cs_settings)) {
-                    SettingAction(stringResource(R.string.cs_application), stringResource(R.string.cs_application_summary)) { onNavigate("app-settings") }
-                    SettingAction(stringResource(R.string.cs_network), stringResource(R.string.cs_network_summary)) { onNavigate("network-settings") }
-                    SettingAction(stringResource(R.string.cs_override)) { onNavigate("override") }
-                    SettingAction(stringResource(R.string.cs_meta)) { onNavigate("meta-feature") }
-                    SettingAction(stringResource(R.string.cs_profiles)) { onNavigate("profiles") }
-                    SettingAction(stringResource(R.string.cs_backup), stringResource(R.string.cs_backup_summary)) { onNavigate("backup") }
-                    SettingAction(stringResource(R.string.cs_logs)) { onNavigate("logs") }
-                    SettingAction(stringResource(R.string.cs_help)) { onNavigate("help") }
-                    SettingAction(stringResource(R.string.cs_about)) { onNavigate("about") }
+            "settings" -> {
+                item {
+                    SettingSection(stringResource(R.string.cs_settings)) {
+                        SettingAction(stringResource(R.string.cs_application), stringResource(R.string.cs_application_summary)) { onNavigate("app-settings") }
+                        SettingAction(stringResource(R.string.cs_network), stringResource(R.string.cs_network_summary)) { onNavigate("network-settings") }
+                        SettingAction(stringResource(R.string.cs_override)) { onNavigate("override") }
+                        SettingAction(stringResource(R.string.cs_meta)) { onNavigate("meta-feature") }
+                        SettingAction(stringResource(R.string.cs_profiles)) { onNavigate("profiles") }
+                        SettingAction(stringResource(R.string.cs_backup), stringResource(R.string.cs_backup_summary)) { onNavigate("backup") }
+                        SettingAction(stringResource(R.string.cs_logs)) { onNavigate("logs") }
+                        SettingAction(stringResource(R.string.cs_help)) { onNavigate("help") }
+                        SettingAction(stringResource(R.string.cs_about)) { onNavigate("about") }
+                    }
+                }
+                item {
+                    SettingSection(text("Tools and diagnostics", "工具与诊断")) {
+                        SettingAction(text("Providers", "Providers")) { onNavigate("providers") }
+                        SettingAction(text("Connections", "连接")) { onNavigate("connections") }
+                        SettingAction(text("IP quality", "IP 质量")) { onNavigate("quality") }
+                        SettingAction(text("Latency and service probes", "延迟与服务检测")) { onNavigate("latency") }
+                    }
                 }
             }
             "app-settings" -> {
