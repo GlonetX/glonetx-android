@@ -43,9 +43,9 @@ import java.util.Date
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun ProxyScreen(prefs:UiPreferences,onPrefs:((UiPreferences)->UiPreferences)->Unit,model:FeatureViewModel=viewModel()) {
+@Composable fun ProxyScreen(prefs:UiPreferences,query:String,onPrefs:((UiPreferences)->UiPreferences)->Unit,model:FeatureViewModel=viewModel()) {
     val groups by model.groups.collectAsStateWithLifecycle();val group by model.group.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle()
-    var selected by rememberSaveable{mutableStateOf(prefs.proxyLastGroup)};var query by rememberSaveable{mutableStateOf("")};var menu by remember{mutableStateOf(false)}
+    var selected by rememberSaveable{mutableStateOf(prefs.proxyLastGroup)}
     val sort=runCatching{ProxySort.valueOf(prefs.proxySort)}.getOrDefault(ProxySort.Default)
     var revision by remember { mutableIntStateOf(0) }
     DisposableEffect(Unit) {
@@ -70,9 +70,6 @@ import java.util.Date
     }
     LaunchedEffect(selected,sort){if(selected.isNotBlank()){model.loadGroup(selected,sort);onPrefs{it.copy(proxyLastGroup=selected)}} else model.group.value=null}
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(query,{query=it},Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp),label={Text(text("Find a node","搜索节点"))},singleLine=true,
-            leadingIcon={Icon(Icons.Default.Search,null)},
-            trailingIcon={ IconButton(onClick={menu=true}){Icon(Icons.Default.Tune,text("Display options","显示选项"))};DropdownMenu(menu,{menu=false}){ProxySort.values().forEach{s->DropdownMenuItem(text={Text(s.name)},onClick={onPrefs{it.copy(proxySort=s.name)};menu=false})};listOf("Tight", "Standard", "Loose").forEach { density -> DropdownMenuItem(text={Text(text("Card density: ","卡片密度：")+density)},onClick={onPrefs{it.copy(proxyDensity=density)};menu=false}) };DropdownMenuItem(text={Text(if(prefs.proxyIconStyle=="Flag")text("Hide flags","隐藏旗帜")else text("Show flags","显示旗帜"))},onClick={onPrefs{it.copy(proxyIconStyle=if(it.proxyIconStyle=="Flag")"None" else "Flag")};menu=false});DropdownMenuItem(text={Text(text("Toggle selectable groups only","切换仅显示可选择分组"))},onClick={onPrefs{it.copy(proxyExcludeNotSelectable=!it.proxyExcludeNotSelectable)};menu=false});DropdownMenuItem(text={Text(text("Columns: ","列数：")+prefs.proxyLine)},onClick={onPrefs{it.copy(proxyLine=it.proxyLine%4+1)};menu=false})} })
         if(groups.isNotEmpty()) ScrollableTabRow(groups.indexOf(selected).coerceAtLeast(0),edgePadding=16.dp){groups.forEach{g->Tab(selected==g,{selected=g},text={Text(g)})}}
         if(error!=null)ErrorState(error!!){model.loadGroups(prefs.proxyExcludeNotSelectable);if(selected.isNotBlank())model.loadGroup(selected,sort)}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())

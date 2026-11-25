@@ -20,16 +20,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CancellationException
@@ -50,10 +58,12 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.github.kr328.clash.common.constants.Intents
 import com.github.kr328.clash.core.bridge.Bridge
+import com.github.kr328.clash.core.model.ProxySort
 import com.github.kr328.clash.presentation.AppViewModel
 import com.github.kr328.clash.presentation.screens.*
 import com.github.kr328.clash.service.model.Profile
 import com.github.kr328.clash.service.settings.RuntimePhase
+import com.github.kr328.clash.service.settings.UiPreferences
 import com.github.kr328.clash.util.startClashService
 import com.github.kr328.clash.util.stopClashService
 import com.github.kr328.clash.util.AppUpdate
@@ -114,6 +124,67 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable private fun ProxySearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    BasicTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.onSurface),
+        cursorBrush = SolidColor(colors.primary),
+        modifier = modifier.height(40.dp),
+        decorationBox = { innerTextField ->
+            Row(
+                Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).background(colors.surfaceContainerHigh).padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Search, null, Modifier.size(18.dp), tint = colors.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) {
+                        Text(text("Search nodes", "搜索节点"), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                    }
+                    innerTextField()
+                }
+            }
+        },
+    )
+}
+
+@Composable private fun ProxyOptionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    prefs: UiPreferences,
+    onPrefs: ((UiPreferences) -> UiPreferences) -> Unit,
+) {
+    DropdownMenu(expanded, onDismiss) {
+        ProxySort.values().forEach { sort ->
+            DropdownMenuItem(
+                text = { Text(sort.name) },
+                onClick = { onPrefs { it.copy(proxySort = sort.name) }; onDismiss() },
+            )
+        }
+        listOf("Tight", "Standard", "Loose").forEach { density ->
+            DropdownMenuItem(
+                text = { Text(text("Card density: ", "卡片密度：") + density) },
+                onClick = { onPrefs { it.copy(proxyDensity = density) }; onDismiss() },
+            )
+        }
+        DropdownMenuItem(
+            text = { Text(text(if (prefs.proxyIconStyle == "Flag") "Hide flags" else "Show flags", if (prefs.proxyIconStyle == "Flag") "隐藏旗帜" else "显示旗帜")) },
+            onClick = { onPrefs { it.copy(proxyIconStyle = if (it.proxyIconStyle == "Flag") "None" else "Flag") }; onDismiss() },
+        )
+        DropdownMenuItem(
+            text = { Text(text("Toggle selectable groups only", "切换仅显示可选择分组")) },
+            onClick = { onPrefs { it.copy(proxyExcludeNotSelectable = !it.proxyExcludeNotSelectable) }; onDismiss() },
+        )
+        DropdownMenuItem(
+            text = { Text(text("Columns: ", "列数：") + prefs.proxyLine) },
+            onClick = { onPrefs { it.copy(proxyLine = it.proxyLine % 4 + 1) }; onDismiss() },
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun ApplicationScreen(activity: MainActivity, model: AppViewModel = viewModel()) {
     val nav = rememberNavController()
@@ -140,6 +211,8 @@ class MainActivity : ComponentActivity() {
         }.onFailure { model.message(it.message ?: "Unable to change the launcher icon") } }
     }
     val snackbar = remember { SnackbarHostState() }
+    var proxyQuery by rememberSaveable { mutableStateOf("") }
+    var proxyMenu by remember { mutableStateOf(false) }
     var release by remember { mutableStateOf<AppUpdate.Release?>(null) }
     var updateBusy by remember { mutableStateOf(false) }
     fun checkUpdate(notify: Boolean) {
@@ -380,7 +453,24 @@ class MainActivity : ComponentActivity() {
     ) { GlonetXTheme(mode = prefs.darkMode, dynamic = prefs.dynamicColor) {
         val destinations = listOf(Triple("home", Icons.Default.Home, text("Home", "首页")), Triple("proxy", Icons.Default.Public, text("Proxies", "代理")), Triple("settings", Icons.Default.Settings, text("Settings", "设置")))
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
-            TopAppBar(title = { Text(when(route.substringBefore('/')) { "home" -> "GlonetX"; "proxy" -> text("Proxies", "代理"); "settings" -> text("Settings", "设置"); else -> route.substringBefore('/').replace('-', ' ').replaceFirstChar { it.uppercase() } }) }, navigationIcon = {
+            TopAppBar(title = {
+                when (route.substringBefore('/')) {
+                    "proxy" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text("Proxies", "代理"), style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(12.dp))
+                        ProxySearchField(proxyQuery, { proxyQuery = it }, Modifier.weight(1f))
+                        Box {
+                            IconButton(onClick = { proxyMenu = true }) {
+                                Icon(Icons.Default.Tune, text("Display options", "显示选项"))
+                            }
+                            ProxyOptionsMenu(proxyMenu, { proxyMenu = false }, prefs, model::updateUi)
+                        }
+                    }
+                    "home" -> Text("GlonetX")
+                    "settings" -> Text(text("Settings", "设置"))
+                    else -> Text(route.substringBefore('/').replace('-', ' ').replaceFirstChar { it.uppercase() })
+                }
+            }, navigationIcon = {
                 if(!root) IconButton(onClick = { activity.onBackPressedDispatcher.onBackPressed() }) { Icon(Icons.Default.ArrowBack, text("Back", "返回")) }
             })
         }, bottomBar = { if(root && !wide) NavigationBar {
@@ -407,7 +497,7 @@ class MainActivity : ComponentActivity() {
                     val home by model.home.collectAsStateWithLifecycle()
                     HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi)
                 }
-                composable("proxy") { ProxyScreen(prefs, model::updateUi) }
+                composable("proxy") { ProxyScreen(prefs, proxyQuery, model::updateUi) }
                 listOf("settings", "app-settings", "network-settings").forEach { page -> composable(page) {
                     SettingsScreen(page, snapshot, model::updateRuntime, model::updateUi, ::navigate,
                         onCheckUpdate = { checkUpdate(true) },
