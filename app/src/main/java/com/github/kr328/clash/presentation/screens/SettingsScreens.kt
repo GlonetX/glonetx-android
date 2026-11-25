@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -154,12 +155,12 @@ fun SettingSection(title: String, content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 fun SettingAction(title: String, summary: String? = null, icon: ImageVector? = null, onClick: () -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, modifier = Modifier.clickable(onClick = onClick))
+    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent), modifier = Modifier.clickable(onClick = onClick))
 }
 
 @Composable
 fun SettingSwitch(title: String, checked: Boolean, summary: String? = null, icon: ImageVector? = null, onChange: (Boolean) -> Unit) {
-    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } },
+    ListItem(headlineContent = { Text(title) }, supportingContent = summary?.let { { Text(it) } }, leadingContent = icon?.let { { Icon(it, contentDescription = null, tint = MaterialTheme.colorScheme.primary) } }, colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange) })
 }
 
