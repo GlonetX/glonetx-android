@@ -1,5 +1,8 @@
 package com.github.kr328.clash.presentation.screens
 
+import android.graphics.Typeface
+import android.text.Spanned
+import android.text.style.StyleSpan
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -11,8 +14,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.text.HtmlCompat
 import com.github.kr328.clash.design.R
+
+private fun Spanned.toAnnotatedStringCompat(): AnnotatedString {
+    val builder = AnnotatedString.Builder(toString())
+    getSpans(0, length, StyleSpan::class.java).forEach { span ->
+        if (span.style and Typeface.BOLD != 0) {
+            builder.addStyle(
+                style = SpanStyle(fontWeight = FontWeight.Bold),
+                start = getSpanStart(span).coerceIn(0, length),
+                end = getSpanEnd(span).coerceIn(0, length),
+            )
+        }
+    }
+    return builder.toAnnotatedString()
+}
 
 @Composable
 fun HelpScreen(onOpenUrl: (String) -> Unit, showGuides: Boolean = true) {
@@ -25,8 +46,14 @@ fun HelpScreen(onOpenUrl: (String) -> Unit, showGuides: Boolean = true) {
     )
     val linkIcons = listOf(Icons.Default.MenuBook,Icons.Default.MenuBook,Icons.Default.Code,Icons.Default.Code,Icons.Default.Language)
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Info,null,tint=MaterialTheme.colorScheme.primary);Text(stringResource(R.string.tips_help), style = MaterialTheme.typography.bodyLarge)} }
         if (showGuides) {
+            item {
+                val tips = HtmlCompat.fromHtml(
+                    stringResource(R.string.tips_help),
+                    HtmlCompat.FROM_HTML_MODE_COMPACT,
+                ).toAnnotatedStringCompat()
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){Icon(Icons.Default.Info,null,tint=MaterialTheme.colorScheme.primary);Text(tips, style = MaterialTheme.typography.bodyLarge)}
+            }
             item { SectionTitle(text("Quick start", "快速开始")) }
             item {
                 InfoCard(
