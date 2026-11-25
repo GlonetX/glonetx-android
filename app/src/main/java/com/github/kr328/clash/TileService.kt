@@ -8,6 +8,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import com.github.kr328.clash.common.compat.registerReceiverCompat
 import com.github.kr328.clash.common.constants.Intents
@@ -27,7 +28,16 @@ class TileService : TileService() {
 
         when (tile.state) {
             Tile.STATE_INACTIVE -> {
-                startClashService()
+                val vpnRequest = startClashService()
+                if (vpnRequest != null) {
+                    Toast.makeText(
+                        this,
+                        "VPN permission required. Grant access, then tap again.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    @Suppress("DEPRECATION")
+                    startActivityAndCollapse(vpnRequest)
+                }
             }
             Tile.STATE_ACTIVE -> {
                 stopClashService()
