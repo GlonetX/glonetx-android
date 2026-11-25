@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +30,17 @@ import com.github.kr328.clash.design.model.ProbeServices
 import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
+
+@Composable private fun proxyLatencyColor(delay: Int): Color {
+    val colors = MaterialTheme.colorScheme
+    val dark = colors.background.luminance() < 0.5f
+    return when {
+        delay <= 0 -> colors.onSurfaceVariant
+        delay <= 200 -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        delay <= 500 -> if (dark) Color(0xFFFFD54F) else Color(0xFFF9A825)
+        else -> colors.error
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ProxyScreen(prefs:UiPreferences,onPrefs:((UiPreferences)->UiPreferences)->Unit,model:FeatureViewModel=viewModel()) {
@@ -68,7 +81,7 @@ import java.util.Date
         if(nodes.isEmpty()&&!busy)EmptyState(text("No nodes. Select a subscription and connect.","没有节点，请选择订阅并连接。"))
         LazyVerticalGrid(columns=GridCells.Fixed(prefs.proxyLine.coerceIn(1,4)),contentPadding=PaddingValues(16.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             items(nodes,key={it.name}){node-> val active=node.name==group?.now
-                Surface(modifier=Modifier.fillMaxWidth().clickable{if(node.isGroup&&node.name in groups)selected=node.name else model.action{check(model.repository.select(selected,node.name)){"This group does not allow manual selection"};model.group.value=model.repository.group(selected,sort)}},shape=MaterialTheme.shapes.large,color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null){Column(Modifier.padding(when(prefs.proxyDensity){"Tight", "Compact" -> 12.dp; "Loose" -> 24.dp; else -> 18.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)){Row{if(prefs.proxyIconStyle=="Flag") { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) };Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis);if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))};if(prefs.proxyDensity !in listOf("Compact", "Tight"))Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis);Text(if(node.delay<=0)"—" else "${node.delay} ms",style=MaterialTheme.typography.labelLarge,color=if(node.delay in 1..300)MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)}}
+                Surface(modifier=Modifier.fillMaxWidth().clickable{if(node.isGroup&&node.name in groups)selected=node.name else model.action{check(model.repository.select(selected,node.name)){"This group does not allow manual selection"};model.group.value=model.repository.group(selected,sort)}},shape=MaterialTheme.shapes.large,color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null){Column(Modifier.padding(when(prefs.proxyDensity){"Tight", "Compact" -> 12.dp; "Loose" -> 24.dp; else -> 18.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)){Row{if(prefs.proxyIconStyle=="Flag") { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) };Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis);if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))};if(prefs.proxyDensity !in listOf("Compact", "Tight"))Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis);Text(if(node.delay<=0)"—" else "${node.delay} ms",style=MaterialTheme.typography.labelLarge,color=proxyLatencyColor(node.delay))}}
             }
         }
     }
