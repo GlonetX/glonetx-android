@@ -36,7 +36,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -523,10 +522,18 @@ class MainActivity : ComponentActivity() {
                         TopBarSearchField(connectionQuery, { connectionQuery = it }, text("Host, process, rule…", "主机、进程、规则…"), Modifier.weight(1f))
                     }
                     "home" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (homeHeaderVisible) {
-                            Text("GlonetX", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End, style = MaterialTheme.typography.titleLarge)
-                        } else {
-                            Spacer(Modifier.weight(1f))
+                        Text("GlonetX", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.weight(1f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            Text("${bytes(home.download)}/s", style = MaterialTheme.typography.labelSmall)
+                            Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                            Text("${bytes(home.upload)}/s", style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (!homeHeaderVisible) {
                             val nextMode = when (home.mode) {
                                 TunnelState.Mode.Rule -> TunnelState.Mode.Global
                                 TunnelState.Mode.Global -> TunnelState.Mode.Direct

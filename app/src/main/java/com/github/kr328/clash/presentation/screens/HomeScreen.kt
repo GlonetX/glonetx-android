@@ -108,20 +108,14 @@ private fun formatUptime(seconds:Long):String {
                     }
                     Column(Modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                         val profileLabel = state.active?.name ?: text("Choose a subscription to begin","选择订阅以开始连接")
-                        val uptimeLabel = uptime?.let { "${text("Uptime","运行时长")} $it" }
                         Row(verticalAlignment=Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(if(state.connected)text("Connected","已连接")else text("Ready when you are","随时准备连接"),style=MaterialTheme.typography.headlineLarge)
-                                Text(
-                                    if (uptimeLabel != null) "$profileLabel · $uptimeLabel" else profileLabel,
-                                    color=MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
                                 if (state.connected) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        MetricDetail(Icons.Default.Download,text("Download","下载"),"${bytes(state.download)}/s",tint=MaterialTheme.colorScheme.primary)
-                                        MetricDetail(Icons.Default.Upload,text("Upload","上传"),"${bytes(state.upload)}/s",tint=MaterialTheme.colorScheme.tertiary)
-                                    }
+                                    Text(uptime ?: "00:00:00", style = MaterialTheme.typography.headlineLarge)
+                                } else {
+                                    Text(text("Ready when you are","随时准备连接"), style = MaterialTheme.typography.headlineLarge)
                                 }
+                                Text(profileLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             FilledIconButton(
                                 onClick={
