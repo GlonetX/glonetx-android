@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -59,6 +60,7 @@ import androidx.core.graphics.drawable.IconCompat
 import com.github.kr328.clash.common.constants.Intents
 import com.github.kr328.clash.core.bridge.Bridge
 import com.github.kr328.clash.core.model.ProxySort
+import com.github.kr328.clash.core.model.TunnelState
 import com.github.kr328.clash.presentation.AppViewModel
 import com.github.kr328.clash.presentation.screens.*
 import com.github.kr328.clash.service.model.Profile
@@ -210,7 +212,9 @@ class MainActivity : ComponentActivity() {
         }
     }
     val snapshot by model.settings.collectAsStateWithLifecycle()
+    val home by model.home.collectAsStateWithLifecycle()
     val prefs = snapshot?.ui ?: com.github.kr328.clash.service.settings.UiPreferences()
+    var homeHeaderVisible by remember { mutableStateOf(true) }
     LaunchedEffect(snapshot?.ui?.hideFromRecents) {
         snapshot?.ui?.let { ui -> runCatching {
             (activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).appTasks.forEach { it.setExcludeFromRecents(ui.hideFromRecents) }
@@ -518,7 +522,28 @@ class MainActivity : ComponentActivity() {
                         Spacer(Modifier.width(12.dp))
                         TopBarSearchField(connectionQuery, { connectionQuery = it }, text("Host, process, rule…", "主机、进程、规则…"), Modifier.weight(1f))
                     }
-                    "home" -> Text("GlonetX")
+                    "home" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        if (homeHeaderVisible) {
+                            Text("GlonetX", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End, style = MaterialTheme.typography.titleLarge)
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                            val nextMode = when (home.mode) {
+                                TunnelState.Mode.Rule -> TunnelState.Mode.Global
+                                TunnelState.Mode.Global -> TunnelState.Mode.Direct
+                                else -> TunnelState.Mode.Rule
+                            }
+                            TextButton(onClick = { model.setMode(nextMode) }) {
+                                Text(when (home.mode) {
+                                    TunnelState.Mode.Rule -> text("Rule", "规则")
+                                    TunnelState.Mode.Global -> text("Global", "全局")
+                                    else -> text("Direct", "直连")
+                                })
+                            }
+                            IconButton(onClick = { toggle() }) {
+                                Icon(Icons.Default.PowerSettingsNew, if (home.connected) text("Disconnect", "断开") else text("Connect", "连接"))
+                            }
+                        }
+                    }
                     "settings" -> Text(text("Settings", "设置"))
                     "override" -> Text(text("Configuration overrides", "配置覆盖"))
                     "meta-feature" -> Text(text("Kernel features", "内核特性"))
@@ -550,7 +575,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 composable("home") {
                     val home by model.home.collectAsStateWithLifecycle()
-                    HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi)
+                    HomeScreen(home, prefs, snapshot, ::toggle, ::navigate, model::refreshIp, model::updateUi, onHeaderVisible = { homeHeaderVisible = it })
                 }
                 composable("proxy") { ProxyScreen(prefs, proxyQuery, model::updateUi) }
                 listOf("settings", "app-settings", "network-settings").forEach { page -> composable(page) {

@@ -12,6 +12,7 @@ data class UiPreferences(
     val textScale: Int = 100,
     val appLanguage: String = "",
     val lightweightMode: Boolean = false,
+    val hapticFeedback: Boolean = true,
     val hideAppIcon: Boolean = false,
     val hideFromRecents: Boolean = false,
     val appUpdateAutoCheck: Boolean = true,

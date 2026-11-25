@@ -83,6 +83,11 @@ fun SettingsScreen(
                     SettingNumber(stringResource(R.string.cs_text_size), u.textScale, 85..130, suffix="%", icon=Icons.Default.FormatSize) { value -> onUi { it.copy(textScale = value) } }
                     SettingChoice(stringResource(R.string.cs_language), u.appLanguage, listOf("" to stringResource(R.string.cs_system), "zh" to "简体中文", "en" to "English")) { value -> onUi { it.copy(appLanguage = value) } }
                     SettingSwitch(stringResource(R.string.cs_lightweight), u.lightweightMode, stringResource(R.string.cs_lightweight_summary)) { value -> onUi { it.copy(lightweightMode = value) } }
+                    SettingSwitch(
+                        text("Haptic feedback", "震动反馈"),
+                        u.hapticFeedback,
+                        text("Vibrate when toggling the connection.", "切换连接时震动。"),
+                    ) { value -> onUi { it.copy(hapticFeedback = value) } }
                 } }
                 item { SettingSection(stringResource(R.string.cs_behaviour)) {
                     SettingSwitch(text("Start after device restart", "设备重启后启动"), r.autoRestart) { value -> onRuntime { it.copy(autoRestart = value) } }
