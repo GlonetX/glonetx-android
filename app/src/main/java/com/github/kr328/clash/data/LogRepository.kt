@@ -20,10 +20,11 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class LogRepository(private val context:Context){
+    private val logFilePattern=Regex("""clash-\d+\.log(?:\.\d+)?""")
     suspend fun files()=withContext(Dispatchers.IO){context.logsDir.listFiles().orEmpty().mapNotNull{LogFile.parseFromFileName(it.name)}.sortedByDescending{it.date}}
     suspend fun read(name:String)=withContext(Dispatchers.IO){val file=requireNotNull(LogFile.parseFromFileName(name));LogcatReader(context,file).use{it.readAll()}}
     suspend fun delete(name:String)=withContext(Dispatchers.IO){val file=requireNotNull(LogFile.parseFromFileName(name));context.logsDir.resolve(file.fileName).delete()}
-    suspend fun deleteAll()=withContext(Dispatchers.IO){context.logsDir.listFiles().orEmpty().filter{LogFile.parseFromFileName(it.name)!=null}.forEach{it.delete()}}
+    suspend fun deleteAll()=withContext(Dispatchers.IO){context.logsDir.listFiles().orEmpty().filter{it.isFile&&logFilePattern.matches(it.name)}.forEach{it.delete()}}
     fun stop(){context.stopService(Intent(context,LogcatService::class.java))}
     suspend fun level(level:LogMessage.Level)=withClash{val o=queryOverride(Clash.OverrideSlot.Session);o.logLevel=level;patchOverride(Clash.OverrideSlot.Session,o)}
     suspend fun export(uri:Uri,messages:List<LogMessage>)=withContext(Dispatchers.IO){
