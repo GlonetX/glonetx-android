@@ -19,5 +19,5 @@ class LogsViewModel(app:Application):AndroidViewModel(app){
     fun stream(){streaming?.cancel();streaming=viewModelScope.launch{try{repository.stream().collect{messages.value=it}}catch(e:CancellationException){throw e}catch(e:Exception){error.value=e.message}}}
     fun pause(){streaming?.cancel();streaming=null}
     fun stop(){pause();repository.stop()}
-    fun export(uri:Uri)=action{repository.export(uri,messages.value)}
+    fun export(uri:Uri,filtered:List<LogMessage>)=action{repository.export(uri,filtered)}
 }

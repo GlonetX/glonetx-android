@@ -32,10 +32,10 @@ import java.text.DateFormat
 @Composable fun LogViewerScreen(name:String,onBack:()->Unit,model:LogsViewModel=viewModel()){
     val messages by model.messages.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var query by rememberSaveable{mutableStateOf("")};var paused by rememberSaveable{mutableStateOf(false)};var level by rememberSaveable{mutableStateOf("Debug")};var confirm by remember{mutableStateOf(false)}
     val list=rememberLazyListState();var follow by rememberSaveable{mutableStateOf(true)}
-    val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")){uri->if(uri!=null)model.export(uri)}
+    val filtered=messages.filter{it.message.contains(query,true)&&(level=="Debug"||it.level.ordinal>=(runCatching{LogMessage.Level.valueOf(level)}.getOrDefault(LogMessage.Level.Debug)).ordinal)}
+    val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")){uri->if(uri!=null)model.export(uri,filtered)}
     LaunchedEffect(name,paused){if(name=="live"){if(!paused)model.stream()else model.pause()}else model.read(name)}
     DisposableEffect(Unit){onDispose{model.pause()}}
-    val filtered=messages.filter{it.message.contains(query,true)&&(level=="Debug"||it.level.ordinal>=(runCatching{LogMessage.Level.valueOf(level)}.getOrDefault(LogMessage.Level.Debug)).ordinal)}
     LaunchedEffect(filtered.size,follow){if(follow&&filtered.isNotEmpty())list.animateScrollToItem(filtered.lastIndex+3)}
     LazyColumn(state=list,contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
         item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Search messages","搜索日志"))},singleLine=true)}
