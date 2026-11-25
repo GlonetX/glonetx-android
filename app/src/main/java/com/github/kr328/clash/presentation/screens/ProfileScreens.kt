@@ -33,6 +33,23 @@ import com.github.kr328.clash.service.settings.SubscriptionAnnotation
 import java.text.DateFormat
 import java.util.Date
 
+@Composable private fun relativeUpdateTime(timestamp:Long):String {
+    val diff=(System.currentTimeMillis()-timestamp).coerceAtLeast(0)
+    val minutes=diff/60_000
+    val hours=diff/3_600_000
+    val days=diff/86_400_000
+    val months=days/30
+    val years=days/365
+    return when {
+        minutes<1->text("just now","刚刚")
+        minutes<60->text("$minutes minutes ago","$minutes 分钟前")
+        hours<24->text("$hours hours ago","$hours 小时前")
+        days<30->text("$days days ago","$days 天前")
+        months<12->text("$months months ago","$months 个月前")
+        else->text("$years years ago","$years 年前")
+    }
+}
+
 @Composable fun ProfilesScreen(onEdit: (String)->Unit, onCreate: ()->Unit, preferences: UiPreferences, query: String, onPreferences: ((UiPreferences)->UiPreferences)->Unit, model: FeatureViewModel = viewModel()) {
     val profiles by model.profiles.collectAsStateWithLifecycle(); val busy by model.busy.collectAsStateWithLifecycle(); val error by model.error.collectAsStateWithLifecycle()
     var deleting by remember { mutableStateOf<Profile?>(null) }
@@ -83,7 +100,7 @@ import java.util.Date
                         val remainingDays=((p.expire-System.currentTimeMillis()+86_400_000L-1)/86_400_000L).toInt()
                         MetricDetail(Icons.Default.Event,text("Remaining","剩余"),if(remainingDays>0)"$remainingDays ${text("days","天")}"else text("Expired","已到期"))
                     }
-                    if(p.updatedAt>0) MetricDetail(Icons.Default.Update,text("Updated","更新"),DateFormat.getDateInstance().format(Date(p.updatedAt)))
+                    if(p.updatedAt>0) MetricDetail(Icons.Default.Update,text("Updated","更新"),relativeUpdateTime(p.updatedAt))
                 }
             }
         }
