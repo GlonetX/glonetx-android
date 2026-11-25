@@ -42,6 +42,7 @@ data class BackupJob(
     val pendingCount: Int = 0,
     val legacy: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
+    val readyAt: Long? = null,
 ) : Parcelable {
     val terminal: Boolean get() = phase in setOf("Completed", "Failed", "Cancelled")
     override fun describeContents() = 0
@@ -50,6 +51,12 @@ data class BackupJob(
         override fun createFromParcel(parcel: Parcel) = Parcelizer.decodeFromParcel(serializer(), parcel)
         override fun newArray(size: Int): Array<BackupJob?> = arrayOfNulls(size)
     }
+}
+
+internal object BackupJobState {
+    const val READY_TTL_MILLIS = 30 * 60 * 1000L
+    fun isReadyExpired(job: BackupJob, now: Long = System.currentTimeMillis()): Boolean =
+        job.phase == "Ready" && now - (job.readyAt ?: job.createdAt) >= READY_TTL_MILLIS
 }
 
 internal object BackupLimits {

@@ -45,20 +45,32 @@ internal class BackupEngine private constructor(private val context: Context) {
     private var active: String? = null
 
     init {
-        // Never resume a password operation or leave a plaintext stage after a
-        // process restart. Persistent records remain available to the UI.
-        File(BackupArchive.root(context), "jobs").listFiles()?.filter(File::isDirectory)?.forEach { dir ->
-            val id = dir.name
-            runCatching { read(id) }.getOrNull()?.let { previous ->
-                if (!previous.terminal) write(previous.copy(phase = "Failed", message = "Interrupted by process restart; enter the backup password and retry"))
-                cleanData(dir)
+        // Never resume a password operation after a process restart. A fresh
+        // restore preview can be reattached, but its plaintext stage must not
+        // survive indefinitely.
+        val now = System.currentTimeMillis()
+        val previousJobs = File(BackupArchive.root(context), "jobs").listFiles()?.filter(File::isDirectory)
+            ?.mapNotNull { dir -> runCatching { read(dir.name) }.getOrNull() }
+            .orEmpty()
+        val ready = previousJobs.filter { it.phase == "Ready" && !BackupJobState.isReadyExpired(it, now) }
+            .maxByOrNull { it.readyAt ?: it.createdAt }
+        previousJobs.forEach { previous ->
+            if (previous.id == ready?.id) return@forEach
+            val message = when {
+                BackupJobState.isReadyExpired(previous, now) -> "Restore preview expired; prepare the backup again"
+                previous.phase == "Ready" -> "Restore preview superseded; prepare the backup again"
+                else -> "Interrupted by process restart; enter the backup password and retry"
             }
+            if (!previous.terminal) write(previous.copy(phase = "Failed", message = message))
+            cleanData(BackupArchive.jobDirectory(context, previous.id))
         }
+        active = ready?.id
     }
     fun client() = WebDavClient(credentials.config(), credentials.password())
 
     suspend fun enqueue(operation: String, name: String, password: ByteArray): String = withContext(Dispatchers.IO) {
         admission.withLock {
+            expireReadyJobs()
             require(active == null) { "A backup or restore is already active" }
             WebDavClient.validate(credentials.config())
             if (operation == "Restore") require(name.endsWith(".gxbackup.age") || name.endsWith(".zip")) { "Unsupported backup file" }
@@ -155,6 +167,7 @@ internal class BackupEngine private constructor(private val context: Context) {
                     val info = BackupArchive.prepare(context, archive, work)
                     archive.delete(); download.delete()
                     write(read(id)!!.copy(phase = "Ready", progress = 80, importedCount = info.imported, pendingCount = info.pending, legacy = info.legacy,
+                        readyAt = System.currentTimeMillis(),
                         message = if (info.legacy) "Legacy backup: settings only; existing subscriptions will be preserved" else "Ready to replace subscriptions and settings; confirmation will stop VPN"))
                 }
             } catch (e: CancellationException) {
@@ -188,7 +201,20 @@ internal class BackupEngine private constructor(private val context: Context) {
         return android.util.AtomicFile(file).openRead().bufferedReader().use { json.decodeFromString<BackupJob>(it.readText()) }
     }
     @Synchronized private fun write(job: BackupJob) = BackupArchive.atomicWrite(File(BackupArchive.jobDirectory(context, job.id), "job.json"), json.encodeToString(job))
-    private fun update(id: String, phase: String, progress: Int = 0, message: String = "") { read(id)?.let { write(it.copy(phase = phase, progress = progress, message = message)) } }
+    private fun update(id: String, phase: String, progress: Int = 0, message: String = "") {
+        read(id)?.let { write(it.copy(phase = phase, progress = progress, message = message,
+            readyAt = if (phase == "Ready") System.currentTimeMillis() else it.readyAt)) }
+    }
+    private fun expireReadyJobs() {
+        val now = System.currentTimeMillis()
+        File(BackupArchive.root(context), "jobs").listFiles()?.filter(File::isDirectory)?.forEach { dir ->
+            val job = runCatching { read(dir.name) }.getOrNull() ?: return@forEach
+            if (!BackupJobState.isReadyExpired(job, now)) return@forEach
+            write(job.copy(phase = "Failed", message = "Restore preview expired; prepare the backup again"))
+            cleanData(dir)
+            if (active == job.id) active = null
+        }
+    }
     fun latest(): BackupJob? = File(BackupArchive.root(context), "jobs").listFiles()?.mapNotNull { runCatching { read(it.name) }.getOrNull() }?.maxByOrNull { it.createdAt }
     private fun cleanData(work: File) { work.listFiles()?.filter { it.name != "job.json" && it.name != "job.json.bak" }?.forEach(File::deleteRecursively) }
     companion object {

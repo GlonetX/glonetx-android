@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.*
 class BackupViewModel(private val saved:SavedStateHandle):ViewModel(){
     val config=MutableStateFlow<BackupConfig?>(null);val files=MutableStateFlow<List<BackupRemoteFile>>(emptyList());val job=MutableStateFlow<BackupJob?>(null);val error=MutableStateFlow<String?>(null);val busy=MutableStateFlow(false)
     private var poll:Job?=null
-    init{action{config.value=client{getConfig()};saved.get<String>("backup.job")?.let{watch(it)}}}
+    init{action{config.value=client{getConfig()};val latest=client{getLatestJob()};if(latest!=null&&!latest.terminal)watch(latest.id)else{job.value=latest;saved.remove<String>("backup.job")}}}
     private suspend fun<T> client(block:suspend IBackupManager.()->T):T=withContext(Dispatchers.IO){Remote.service.remote.get().backup().block()}
     private fun action(block:suspend()->Unit)=viewModelScope.launch{busy.value=true;try{error.value=null;block()}catch(e:CancellationException){throw e}catch(e:Exception){error.value=e.message?:"Backup operation failed"}finally{busy.value=false}}
     fun retryConfig()=action{config.value=client{getConfig()}}
