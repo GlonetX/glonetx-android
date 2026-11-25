@@ -140,14 +140,25 @@ class MainActivity : ComponentActivity() {
             updateBusy = true
             try {
                 val channel = if (prefs.appUpdateChannel == "Prerelease") UpdateChannel.Prerelease else UpdateChannel.Stable
-                release = AppUpdate.checkUpdate(activity, channel)
-                if (release == null && notify) model.message("No update available")
+                val result = AppUpdate.checkUpdate(activity, channel)
+                when (result) {
+                    is AppUpdate.CheckResult.Found -> release = result.release
+                    AppUpdate.CheckResult.None -> {
+                        release = null
+                        if (notify) model.message("No update available")
+                    }
+                    is AppUpdate.CheckResult.Failed -> {
+                        val detail = result.error.message?.takeIf { it.isNotBlank() }
+                            ?: result.error.javaClass.simpleName
+                        model.message("Unable to check for updates: $detail")
+                    }
+                }
+                if (!notify && result !is AppUpdate.CheckResult.Failed) AppUpdate.markChecked(activity)
             } finally { updateBusy = false }
         }
     }
     LaunchedEffect(snapshot?.ui?.appUpdateAutoCheck) {
         if (snapshot?.ui?.appUpdateAutoCheck == true && AppUpdate.isAutoCheckDue(activity)) {
-            AppUpdate.markChecked(activity)
             checkUpdate(false)
         }
     }

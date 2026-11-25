@@ -10,11 +10,14 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import com.github.kr328.clash.common.log.Log
 import com.github.kr328.clash.design.settings.UpdateChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -34,6 +37,14 @@ object AppUpdate {
         /** Expected SHA-256 of [apkUrl], or null when the release publishes none. */
         val apkSha256: String? = null,
     )
+
+    sealed interface CheckResult {
+        data class Found(val release: Release) : CheckResult
+        data object None : CheckResult
+        data class Failed(val error: Throwable) : CheckResult
+    }
+
+    private class UpdateCheckException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
     fun isAutoCheckDue(context: Context): Boolean {
         val prefs = context.getSharedPreferences("app_update", Context.MODE_PRIVATE)
@@ -84,56 +95,65 @@ object AppUpdate {
     suspend fun checkUpdate(
         context: Context,
         channel: UpdateChannel = UpdateChannel.Stable,
-    ): Release? {
+    ): CheckResult {
         return withContext(Dispatchers.IO) {
-            try {
-                val release = fetchRelease(channel) ?: return@withContext null
+            val result = checkUpdateResult {
+                val release = fetchRelease(channel)
 
                 // The stable channel never offers prereleases or drafts; the
                 // prerelease channel selected one explicitly above.
                 if (channel != UpdateChannel.Prerelease &&
                     (release.optBoolean("prerelease") || release.optBoolean("draft"))
                 )
-                    return@withContext null
+                    return@checkUpdateResult null
 
-                val tagName = release.optString("tag_name")
+                val tagName = requireUpdateResource(
+                    release.optString("tag_name").takeIf { it.isNotBlank() },
+                    "Update release is missing its tag",
+                )
 
                 val abi = if (Build.SUPPORTED_ABIS.isEmpty()) "arm64-v8a" else Build.SUPPORTED_ABIS[0]
                 val preferred = if (abi == "armeabi-v7a") "armeabi-v7a" else abi
 
-                val assets = release.optJSONArray("assets") ?: return@withContext null
+                val assets = requireUpdateResource(
+                    release.optJSONArray("assets"),
+                    "Update release is missing its assets",
+                )
 
-                val asset = assets.firstAsset {
-                    // exclude the `<apk>.sha256` sidecar assets — their names
-                    // contain the ABI marker too
-                    val name = it.optString("name")
-                    name.endsWith(".apk", ignoreCase = true) && name.contains(preferred) &&
-                        name.contains("-${com.github.kr328.clash.BuildConfig.FLAVOR}-", ignoreCase = true)
-                } ?: return@withContext null
+                val asset = requireUpdateResource(
+                    assets.firstAsset {
+                        // exclude the `<apk>.sha256` sidecar assets — their names
+                        // contain the ABI marker too
+                        val name = it.optString("name")
+                        name.endsWith(".apk", ignoreCase = true) && name.contains(preferred) &&
+                            name.contains("-${com.github.kr328.clash.BuildConfig.FLAVOR}-", ignoreCase = true)
+                    },
+                    "Update release has no APK for this device",
+                )
 
-                val versionName = releaseVersion(tagName, asset.optString("name")) ?: return@withContext null
-                if (!isNewer(currentVersionName(context), versionName)) return@withContext null
+                val versionName = requireUpdateResource(
+                    releaseVersion(tagName, asset.optString("name")),
+                    "Unable to determine the update version",
+                )
+                if (!isNewer(currentVersionName(context), versionName)) return@checkUpdateResult null
 
-                val apkUrl = asset.optString("browser_download_url")
+                val apkUrl = requireUpdateResource(
+                    asset.optString("browser_download_url").takeIf { it.isNotBlank() },
+                    "Update APK is missing its download URL",
+                )
 
                 if (!apkUrl.startsWith("https://")) {
-                    Log.w("Refusing to download update from a non-HTTPS URL: $apkUrl")
-
-                    return@withContext null
+                    throw UpdateCheckException("Refusing to download update from a non-HTTPS URL: $apkUrl")
                 }
 
                 // The release workflows attach a `<apk>.sha256` file next to
                 // each APK. Fail closed when the checksum is missing: an
                 // unverifiable download must never be installed.
-                val apkSha256 = assets
-                    .firstAsset { it.optString("name") == "${asset.optString("name")}.sha256" }
-                    ?.let { fetchSha256(it.optString("browser_download_url")) }
-
-                if (apkSha256 == null) {
-                    Log.w("No published checksum for ${versionName}; refusing the update")
-
-                    return@withContext null
-                }
+                val checksumAsset = requireUpdateResource(
+                    assets.firstAsset { it.optString("name") == "${asset.optString("name")}.sha256" },
+                    "Update release is missing its APK checksum",
+                )
+                val apkSha256 = fetchSha256(checksumAsset.optString("browser_download_url"))
 
                 Release(
                     tagName = tagName,
@@ -143,12 +163,26 @@ object AppUpdate {
                     notes = release.optString("body"),
                     apkSha256 = apkSha256,
                 )
-            } catch (e: Exception) {
-                Log.w("Check update failed: ${e.message}")
-
-                null
             }
+
+            if (result is CheckResult.Failed) Log.w("Check update failed: ${result.error.message}")
+
+            result
         }
+    }
+
+    internal fun checkUpdateResult(block: () -> Release?): CheckResult {
+        return try {
+            block()?.let(CheckResult::Found) ?: CheckResult.None
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CheckResult.Failed(e)
+        }
+    }
+
+    internal fun <T> requireUpdateResource(value: T?, message: String): T {
+        return value ?: throw UpdateCheckException(message)
     }
 
     /**
@@ -156,17 +190,15 @@ object AppUpdate {
      * drafts by itself). Prerelease: the newest prerelease from the release
      * list, falling back to the latest stable release when none exists.
      */
-    private fun fetchRelease(channel: UpdateChannel): JSONObject? {
+    private fun fetchRelease(channel: UpdateChannel): JSONObject {
         if (channel != UpdateChannel.Prerelease)
             return fetchReleaseJson("$RELEASES_API/latest")
 
-        val releases = fetchBody(RELEASES_API)?.let { body ->
-            try {
-                JSONArray(body)
-            } catch (e: Exception) {
-                null
-            }
-        } ?: return null
+        val releases = try {
+            JSONArray(fetchBody(RELEASES_API))
+        } catch (e: JSONException) {
+            throw UpdateCheckException("Invalid prerelease response", e)
+        }
 
         val prerelease = (0 until releases.length()).asSequence()
             .map { releases.optJSONObject(it) }
@@ -175,17 +207,15 @@ object AppUpdate {
         return prerelease ?: fetchReleaseJson("$RELEASES_API/latest")
     }
 
-    private fun fetchReleaseJson(url: String): JSONObject? {
-        return fetchBody(url)?.let { body ->
-            try {
-                JSONObject(body)
-            } catch (e: Exception) {
-                null
-            }
+    private fun fetchReleaseJson(url: String): JSONObject {
+        return try {
+            JSONObject(fetchBody(url))
+        } catch (e: JSONException) {
+            throw UpdateCheckException("Invalid release response", e)
         }
     }
 
-    private fun fetchBody(url: String): String? {
+    private fun fetchBody(url: String): String {
         val connection = URL(url).openConnection() as HttpURLConnection
 
         connection.connectTimeout = 15000
@@ -195,7 +225,7 @@ object AppUpdate {
 
         try {
             if (connection.responseCode != 200)
-                return null
+                throw IOException("Update request failed with HTTP ${connection.responseCode}")
 
             return connection.inputStream.bufferedReader().use { it.readText() }
         } finally {
@@ -210,19 +240,15 @@ object AppUpdate {
     }
 
     /** Hex digest from a `sha256sum`-style asset: `<hex>  <filename>`. */
-    private fun fetchSha256(url: String): String? {
+    private fun fetchSha256(url: String): String {
         if (!url.startsWith("https://")) {
-            Log.w("Refusing to fetch an update checksum over a non-HTTPS URL: $url")
-
-            return null
+            throw UpdateCheckException("Refusing to fetch an update checksum over a non-HTTPS URL: $url")
         }
 
-        val hex = fetchBody(url)?.trim()?.split(Regex("\\s+"))?.firstOrNull()
+        val hex = fetchBody(url).trim().split(Regex("\\s+")).firstOrNull()
 
         if (hex == null || !hex.matches(Regex("[0-9a-fA-F]{64}"))) {
-            Log.w("Invalid published checksum for update: $hex")
-
-            return null
+            throw UpdateCheckException("Invalid published checksum for update: $hex")
         }
 
         return hex.lowercase()
