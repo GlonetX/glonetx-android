@@ -73,12 +73,12 @@ import java.util.Date
         if(groups.isNotEmpty()) ScrollableTabRow(groups.indexOf(selected).coerceAtLeast(0),edgePadding=16.dp){groups.forEach{g->Tab(selected==g,{selected=g},text={Text(g)})}}
         if(error!=null)ErrorState(error!!){model.loadGroups(prefs.proxyExcludeNotSelectable);if(selected.isNotBlank())model.loadGroup(selected,sort)}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text(group?.type.orEmpty(),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge);TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}}
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AccountTree,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.width(6.dp));Text(group?.type.orEmpty(),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge);TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}}
         val nodes=group?.proxies.orEmpty().filter{it.name.contains(query,true)||it.title.contains(query,true)}
         if(nodes.isEmpty()&&!busy)EmptyState(text("No nodes. Select a subscription and connect.","没有节点，请选择订阅并连接。"))
         LazyVerticalGrid(columns=GridCells.Fixed(prefs.proxyLine.coerceIn(1,4)),contentPadding=PaddingValues(16.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             items(nodes,key={it.name}){node-> val active=node.name==group?.now
-                Surface(modifier=Modifier.fillMaxWidth().clickable{if(node.isGroup&&node.name in groups)selected=node.name else model.action{check(model.repository.select(selected,node.name)){"This group does not allow manual selection"};model.group.value=model.repository.group(selected,sort)}},shape=MaterialTheme.shapes.large,color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null){Column(Modifier.padding(when(prefs.proxyDensity){"Tight", "Compact" -> 12.dp; "Loose" -> 24.dp; else -> 18.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)){Row{if(prefs.proxyIconStyle=="Flag") { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) };Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis);if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))};if(prefs.proxyDensity !in listOf("Compact", "Tight"))Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis);Text(if(node.delay<=0)"—" else "${node.delay} ms",style=MaterialTheme.typography.labelLarge,color=proxyLatencyColor(node.delay))}}
+                Surface(modifier=Modifier.fillMaxWidth().clickable{if(node.isGroup&&node.name in groups)selected=node.name else model.action{check(model.repository.select(selected,node.name)){"This group does not allow manual selection"};model.group.value=model.repository.group(selected,sort)}},shape=MaterialTheme.shapes.large,color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null){Column(Modifier.padding(when(prefs.proxyDensity){"Tight", "Compact" -> 12.dp; "Loose" -> 24.dp; else -> 18.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)){Row{if(prefs.proxyIconStyle=="Flag") { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) };Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis);if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))};if(prefs.proxyDensity !in listOf("Compact", "Tight"))Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis);MetricDetail(Icons.Default.NetworkCheck,text("Latency","延迟"),if(node.delay<=0)text("Not tested","未测试")else"${node.delay} ms",tint=proxyLatencyColor(node.delay))}}
             }
         }
     }
@@ -88,10 +88,12 @@ import java.util.Date
     val providers by model.providers.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle()
     LaunchedEffect(Unit){model.loadProviders()}
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item{Button(enabled=!busy,onClick={model.action{providers.filter{it.vehicleType==Provider.VehicleType.HTTP}.forEach{model.repository.updateProvider(it)};model.providers.value=model.repository.providers()}}){Text(text("Update all","全部更新"))}}
+        val typeSummary=providers.groupingBy{it.type}.eachCount().entries.joinToString(" · "){ "${it.key} ${it.value}" }
+        item{InfoCard(text("Providers","Providers"),"${providers.size} ${text("total","个")}" + if(typeSummary.isBlank()) "" else " · $typeSummary",icon=Icons.Default.Dns)}
+        item{Button(enabled=!busy,onClick={model.action{providers.filter{it.vehicleType==Provider.VehicleType.HTTP}.forEach{model.repository.updateProvider(it)};model.providers.value=model.repository.providers()}}){Icon(Icons.Default.Refresh,null);Text(text("Update all","全部更新"))}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())};if(error!=null)item{ErrorState(error!!){model.loadProviders()}}
         if(providers.isEmpty()&&!busy)item{EmptyState(text("No providers in the active configuration","当前配置没有 Provider"))}
-        items(providers,key={"${it.type}/${it.name}"}){p->InfoCard(p.name,"${p.type} · ${p.vehicleType}\n${DateFormat.getDateTimeInstance().format(Date(p.updatedAt))}",trailing={IconButton(enabled=!busy,onClick={model.action{model.repository.updateProvider(p);model.providers.value=model.repository.providers()}}){Icon(Icons.Default.Refresh,text("Update","更新"))}})}
+        items(providers,key={"${it.type}/${it.name}"}){p->InfoCard(p.name,"${p.type} · ${p.vehicleType}\n${text("Updated","更新于")} ${DateFormat.getDateTimeInstance().format(Date(p.updatedAt))}",icon=Icons.Default.Cloud,trailing={IconButton(enabled=!busy,onClick={model.action{model.repository.updateProvider(p);model.providers.value=model.repository.providers()}}){Icon(Icons.Default.Refresh,text("Update","更新"))}})}
     }
 }
 
@@ -107,20 +109,33 @@ import java.util.Date
     rows=when(prefs.connectionsSort){"Time"->rows.sortedByDescending{it.start};"Name"->rows.sortedBy{it.host};else->rows.sortedByDescending{it.upload+it.download}}
     if(prefs.connectionsSortReversed)rows=rows.reversed()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Host, process, rule…","主机、进程、规则…"))},singleLine=true)}
-        item{Row{FilterChip(paused,{paused=!paused},label={Text(text("Pause","暂停"))});Spacer(Modifier.width(8.dp));FilterChip(prefs.connectionsGroupByProcess,{onPrefs{it.copy(connectionsGroupByProcess=!it.connectionsGroupByProcess)}},label={Text(text("Group","分组"))});TextButton(onClick={onPrefs{it.copy(connectionsSort=when(it.connectionsSort){"Size"->"Time";"Time"->"Name";else->"Size"})}}){Text(prefs.connectionsSort)};IconButton(onClick={onPrefs{it.copy(connectionsSortReversed=!it.connectionsSortReversed)}}){Icon(Icons.Default.Sort,null)}}}
-        item{TextButton(onClick={confirmAll=true},enabled=list.isNotEmpty()){Text(text("Close all connections","关闭所有连接"))}}
+        item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Host, process, rule…","主机、进程、规则…"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})}
+        item{InfoCard(text("Active connections","活动连接"),"${list.size} ${text("connections","个连接")}",icon=Icons.Default.Lan)}
+        item{Row{FilterChip(paused,{paused=!paused},label={Text(text("Pause","暂停"))});Spacer(Modifier.width(8.dp));FilterChip(prefs.connectionsGroupByProcess,{onPrefs{it.copy(connectionsGroupByProcess=!it.connectionsGroupByProcess)}},label={Text(text("Group","分组"))});TextButton(onClick={onPrefs{it.copy(connectionsSort=when(it.connectionsSort){"Size"->"Time";"Time"->"Name";else->"Size"})}}){Text(when(prefs.connectionsSort){"Time"->text("Time","时间");"Name"->text("Name","名称");else->text("Size","大小")});Icon(if(prefs.connectionsSortReversed)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,null)};IconButton(onClick={onPrefs{it.copy(connectionsSortReversed=!it.connectionsSortReversed)}}){Icon(Icons.Default.Sort,null)}}}
+        item{TextButton(onClick={confirmAll=true},enabled=list.isNotEmpty()){Icon(Icons.Default.Close,null);Text("${text("Close all connections","关闭所有连接")} (${list.size})")}}
         if(error!=null)item{ErrorState(error!!){model.loadConnections()}}
         if(rows.isEmpty())item{EmptyState(text("No matching connections","没有匹配的连接"))}
         if(prefs.connectionsGroupByProcess)rows.groupBy{it.process?.ifBlank{null}?:"Unknown"}.forEach{(process,entries)->
-            item(key="group/$process"){InfoCard(process,"${entries.size}",onClick={onPrefs{it.copy(connectionsCollapsedGroups=if(process in it.connectionsCollapsedGroups)it.connectionsCollapsedGroups-process else it.connectionsCollapsedGroups+process)}})}
+            item(key="group/$process"){InfoCard(process,"${entries.size} ${text("connections","个连接")}",icon=Icons.Default.DeviceHub,onClick={onPrefs{it.copy(connectionsCollapsedGroups=if(process in it.connectionsCollapsedGroups)it.connectionsCollapsedGroups-process else it.connectionsCollapsedGroups+process)}})}
             if(process !in prefs.connectionsCollapsedGroups)items(entries,key={it.id}){c->ConnectionRow(c){selected=c}}
         }else items(rows,key={it.id}){c->ConnectionRow(c){selected=c}}
     }
     selected?.let{c->AlertDialog(onDismissRequest={selected=null},title={Text(c.host.ifBlank{c.destination})},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){listOf("ID" to c.id,"Protocol" to "${c.network} / ${c.type}","Source" to c.source,"Destination" to c.destination,"Process" to c.process,"Rule" to c.rule,"Chain" to c.chains).forEach{(label,value)->Text("$label: ${value.orEmpty()}")}}},confirmButton={TextButton(onClick={selected=null;model.action{model.repository.closeConnection(c.id);model.connections.value=model.repository.connections()}}){Text(text("Close connection","关闭连接"))}},dismissButton={TextButton(onClick={selected=null}){Text(text("Back","返回"))}})}
     if(confirmAll)ConfirmDialog(text("Close all connections?","关闭所有连接？"),text("Applications may reconnect automatically.","应用可能会自动重新连接。"),{confirmAll=false}){confirmAll=false;model.action{list.forEach{model.repository.closeConnection(it.id)};model.connections.value=model.repository.connections()}}
 }
-@Composable private fun ConnectionRow(c:ConnectionItem,onClick:()->Unit){InfoCard(c.host.ifBlank{c.destination},"${c.network} · ${c.process.orEmpty()}\n↑ ${bytes(c.upload)}  ↓ ${bytes(c.download)}",onClick)}
+@Composable private fun ConnectionRow(c:ConnectionItem,onClick:()->Unit){InfoCard(c.host.ifBlank{c.destination},"${c.network} · ${c.process.orEmpty().ifBlank{text("Unknown process","未知进程")}}\n${text("Upload","上传")} ${bytes(c.upload)} · ${text("Download","下载")} ${bytes(c.download)}",icon=Icons.Default.Lan,onClick=onClick)}
+
+@Composable private fun boolText(value:String?):String=when(value?.lowercase()){"true"->text("Yes","是");"false"->text("No","否");else->value?:"—"}
+
+@Composable private fun ipDetails(ip:ExternalIP?):String {
+    if(ip==null)return "—"
+    return listOfNotNull(
+        ip.ip?.let{"${text("IP","IP")}: $it"},
+        listOfNotNull(ip.country,ip.city).joinToString(", ").takeIf{it.isNotBlank()}?.let{"${text("Location","位置")}: $it"},
+        ip.isp?.let{"${text("ISP","运营商")}: $it"},
+        ip.asn?.let{"${text("ASN","ASN")}: $it"},
+    ).joinToString("\n")
+}
 
 @Composable fun QualityScreen(model:FeatureViewModel=viewModel()) {
     val quality by model.quality.collectAsStateWithLifecycle();val exit by model.ip.collectAsStateWithLifecycle();val direct by model.directIp.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var address by rememberSaveable{mutableStateOf("")}
@@ -128,8 +143,12 @@ import java.util.Date
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
         item{OutlinedTextField(address,{address=it},Modifier.fillMaxWidth(),label={Text(text("IP address (blank uses exit IP)","IP 地址（留空使用出口 IP）"))})};item{Button(enabled=!busy,onClick={model.loadQuality(address)}){Text(text("Check quality","检测质量"))}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())};if(error!=null)item{ErrorState(error!!){model.loadQuality(address)}}
-        item{InfoCard(text("Proxy exit","代理出口"),exit?.let{listOfNotNull(it.ip,it.country,it.city,it.isp,it.asn).joinToString("\n")}?:"—")};item{InfoCard(text("Direct network","直连网络"),direct?.let{listOfNotNull(it.ip,it.country,it.city,it.isp).joinToString("\n")}?:"—")}
-        quality?.let{q->item{InfoCard("Scamalytics","${q.scamalyticsScore?:"—"} · ${q.scamalyticsRisk?:"—"}")};item{InfoCard("ProxyCheck","Risk: ${q.proxyCheckRisk?:"—"}\nProxy: ${q.proxyCheckProxy?:"—"}\nType: ${q.proxyCheckType?:"—"}")};item{InfoCard("IP-API","ISP: ${q.ipApiISP?:"—"}\nProxy: ${q.ipApiProxy?:"—"}\nHosting: ${q.ipApiHosting?:"—"}\nMobile: ${q.ipApiMobile?:"—"}")}}
+        item{InfoCard(text("Proxy exit","代理出口"),ipDetails(exit),icon=Icons.Default.Public)};item{InfoCard(text("Direct network","直连网络"),ipDetails(direct),icon=Icons.Default.Dns)}
+        quality?.let{q->
+            item{InfoCard("Scamalytics","${text("Fraud score","欺诈分数")}: ${q.scamalyticsScore?:"—"}\n${text("Risk","风险")}: ${q.scamalyticsRisk?:"—"}",icon=Icons.Default.Security)}
+            item{InfoCard("ProxyCheck","${text("Risk","风险")}: ${q.proxyCheckRisk?:"—"}\n${text("Proxy","代理")}: ${q.proxyCheckProxy?:"—"}\n${text("Type","类型")}: ${q.proxyCheckType?:"—"}",icon=Icons.Default.Shield)}
+            item{InfoCard("IP-API","${text("ISP","运营商")}: ${q.ipApiISP?:"—"}\n${text("Proxy","代理")}: ${boolText(q.ipApiProxy)}\n${text("Hosting","托管")}: ${boolText(q.ipApiHosting)}\n${text("Mobile","移动网络")}: ${boolText(q.ipApiMobile)}",icon=Icons.Default.Public)}
+        }
     }
 }
 
@@ -137,10 +156,15 @@ import java.util.Date
     val probes by model.probes.collectAsStateWithLifecycle();val busy by model.probeRunning.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var url by rememberSaveable{mutableStateOf("https://www.gstatic.com/generate_204")};var result by rememberSaveable{mutableStateOf<String?>(null)}
     val order=(prefs.probeServiceOrder+ProbeServices.names).distinct();val enabled=if(prefs.probeServiceOrder.isEmpty())order.toSet()else prefs.probeServiceEnabled
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{OutlinedTextField(url,{url=it},Modifier.fillMaxWidth(),label={Text(text("Test URL","测试地址"))})};item{Row(verticalAlignment=Alignment.CenterVertically){Button(enabled=!busy,onClick={model.action{result="${model.repository.latency(url)} ms"}}){Text(text("Test","测试"))};Spacer(Modifier.width(16.dp));Text(result.orEmpty())}}
+        item{OutlinedTextField(url,{url=it},Modifier.fillMaxWidth(),label={Text(text("Test URL","测试地址"))},leadingIcon={Icon(Icons.Default.Link,null)})};item{Row(verticalAlignment=Alignment.CenterVertically){Button(enabled=!busy,onClick={model.action{result=model.repository.latency(url).toString()}}){Text(text("Test","测试"))};Spacer(Modifier.width(16.dp));result?.let{value->val latency=value.toLongOrNull();MetricDetail(Icons.Default.Timer,text("Latency","延迟"),if(latency!=null&&latency>=0)"$latency ms"else text("Failed","失败"),tint=if(latency!=null&&latency>=0)proxyLatencyColor(latency.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())else MaterialTheme.colorScheme.error)}}}
         item{SectionTitle(text("Service probes","服务检测"))};item{Button(enabled=!busy,onClick={model.probe(ProbeServices.ALL.filter{it.name in enabled}.map{it.name to it.url})}){Text(if(busy)text("Checking…","检测中…")else text("Check selected services","检测已选服务"))}}
         if(error!=null)item{ErrorState(error!!){model.error.value=null}}
-        itemsIndexed(order,key={_,s->s}){index,name->val r=probes[name];InfoCard(name,if(name !in probes)"—"else if(r==null)text("Unavailable","不可用")else "HTTP ${r.code} · ${r.latency} ms",trailing={Row(verticalAlignment=Alignment.CenterVertically){if(index>0)IconButton(onClick={val next=order.toMutableList().apply{add(index-1,removeAt(index))};onPrefs{it.copy(probeServiceOrder=next,probeServiceEnabled=enabled)}}){Icon(Icons.Default.ArrowUpward,text("Move up","上移"))};Checkbox(name in enabled,{checked->onPrefs{it.copy(probeServiceOrder=order,probeServiceEnabled=if(checked)enabled+name else enabled-name)}})}})}
+        itemsIndexed(order,key={_,s->s}){index,name->
+            val r=probes[name]
+            val statusIcon=when{name !in probes->Icons.Default.HourglassEmpty;r==null->Icons.Default.ErrorOutline;r.code in 200..299->Icons.Default.CheckCircle;else->Icons.Default.Warning}
+            val subtitle=when{name !in probes->text("Not tested","未测试");r==null->text("Unavailable","不可用");r.code !in 200..299||r.latency<0->text("Failed","失败");else->"HTTP ${r.code} · ${text("Latency","延迟")} ${r.latency} ms"}
+            InfoCard(name,subtitle,icon=statusIcon,trailing={Row(verticalAlignment=Alignment.CenterVertically){if(index>0)IconButton(onClick={val next=order.toMutableList().apply{add(index-1,removeAt(index))};onPrefs{it.copy(probeServiceOrder=next,probeServiceEnabled=enabled)}}){Icon(Icons.Default.ArrowUpward,text("Move up","上移"))};Checkbox(name in enabled,{checked->onPrefs{it.copy(probeServiceOrder=order,probeServiceEnabled=if(checked)enabled+name else enabled-name)}})}})
+        }
     }
 }
 
