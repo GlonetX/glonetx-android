@@ -40,18 +40,29 @@ import java.util.Date
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     LaunchedEffect(Unit) { model.loadProfiles() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding=PaddingValues(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item { Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(query,{query=it},Modifier.weight(1f),label={Text(text("Search subscriptions","搜索订阅"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)}); IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))} } }
-        item { val active=profiles.count{it.active};InfoCard(text("Subscriptions","订阅"),"${profiles.size} ${text("total","个")} · $active ${text("active","个启用")}",icon=Icons.Default.Subscriptions) }
-        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(enabled = !busy && profiles.any { it.imported && it.type != Profile.Type.File }, onClick = { model.action {
-                profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
-                model.loadProfiles()
-            } }) { Icon(Icons.Default.Refresh,null);Text(text("Update all", "全部更新")) }
-        } }
-        if(error!=null) item { ErrorState(error!!){model.loadProfiles()} }
-        if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
+    Scaffold(
+        floatingActionButton = {
+            if (!busy && profiles.any { it.imported && it.type != Profile.Type.File }) {
+                ExtendedFloatingActionButton(
+                    onClick = { model.action {
+                        profiles.filter { it.imported && it.type != Profile.Type.File }.forEach { model.repository.update(it) }
+                        model.loadProfiles()
+                    } },
+                    icon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                    text = { Text(text("Update all", "全部更新")) },
+                )
+            }
+        },
+    ) { inner ->
+        LazyColumn(Modifier.fillMaxSize().padding(inner), contentPadding=PaddingValues(start=20.dp,end=20.dp,top=20.dp,bottom=96.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            item { Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.End, verticalAlignment=Alignment.CenterVertically) {
+                OutlinedTextField(query,{query=it},Modifier.width(220.dp).height(48.dp),placeholder={Text(text("Search subscriptions","搜索订阅"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))}
+            } }
+            if(error!=null) item { ErrorState(error!!){model.loadProfiles()} }
+            if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
         items(profiles.filter { p -> val annotation=preferences.subscriptionMetadata[p.uuid.toString()]; p.name.contains(query,true) || annotation?.tag?.contains(query,true)==true || annotation?.note?.contains(query,true)==true },key={it.uuid.toString()}) { p ->
             ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically) {
@@ -77,6 +88,7 @@ import java.util.Date
                 Row { TextButton(onClick={onEdit(p.uuid.toString())}){Icon(Icons.Default.Edit,null);Text(text("Edit","编辑"))}; TextButton(enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={model.action{model.repository.update(p);model.loadProfiles()}}){Icon(Icons.Default.Refresh,null);Text(text("Update","更新"))}; IconButton(onClick={model.action{onEdit(model.repository.clone(p))}},enabled=!busy&&p.imported){Icon(Icons.Default.ContentCopy,text("Duplicate","复制"))}; IconButton(onClick={sharing=p},enabled=p.type==Profile.Type.Url && p.source.isNotBlank()){Icon(Icons.Default.QrCode,text("Share QR code","分享二维码"))}; IconButton(onClick={deleting=p}){Icon(Icons.Default.Delete,text("Delete","删除"))} }
             } }
         }
+    }
     }
     annotating?.let { p ->
         val original = preferences.subscriptionMetadata[p.uuid.toString()] ?: SubscriptionAnnotation()
