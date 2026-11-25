@@ -1,5 +1,6 @@
 package com.github.kr328.clash.presentation.screens
 
+import android.content.Intent
 import android.view.ViewGroup
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistryOwner
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.kr328.clash.LogcatService
 import com.github.kr328.clash.MainActivity
 import com.github.kr328.clash.R
 import com.github.kr328.clash.remote.Remote
@@ -37,6 +39,7 @@ class ActivityResultRegistryRegressionTest {
     private var profileCreationStarted = false
 
     @After fun removeCreatedProfile() {
+        compose.activity.stopService(Intent(compose.activity, LogcatService::class.java))
         if (!profileCreationStarted) return
 
         runBlocking {
