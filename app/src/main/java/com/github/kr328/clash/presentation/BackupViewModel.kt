@@ -15,6 +15,7 @@ class BackupViewModel(private val saved:SavedStateHandle):ViewModel(){
     init{action{config.value=client{getConfig()};saved.get<String>("backup.job")?.let{watch(it)}}}
     private suspend fun<T> client(block:suspend IBackupManager.()->T):T=withContext(Dispatchers.IO){Remote.service.remote.get().backup().block()}
     private fun action(block:suspend()->Unit)=viewModelScope.launch{busy.value=true;try{error.value=null;block()}catch(e:CancellationException){throw e}catch(e:Exception){error.value=e.message?:"Backup operation failed"}finally{busy.value=false}}
+    fun retryConfig()=action{config.value=client{getConfig()}}
     fun configure(value:BackupConfig,password:String?)=action{client{saveConfig(value,password)};config.value=client{getConfig()}}
     fun list()=action{files.value=client{listRemote()}}
     fun backup(passphrase:ByteArray)=action{try{watch(client{startBackup(passphrase)})}finally{passphrase.fill(0)}}
