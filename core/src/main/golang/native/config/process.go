@@ -80,6 +80,17 @@ func patchOverride(cfg *config.RawConfig, _ string) error {
 			cfg.Proxy = proxies
 		}
 		cfg.Proxy = append(cfg.Proxy, tailscaleProxy)
+		if name, _ := tailscaleProxy["name"].(string); name != "" {
+			route := fmt.Sprintf("IP-CIDR,100.64.0.0/10,%s,no-resolve", name)
+			rules := make([]string, 0, len(cfg.Rule)+1)
+			rules = append(rules, route)
+			for _, rule := range cfg.Rule {
+				if rule != route {
+					rules = append(rules, rule)
+				}
+			}
+			cfg.Rule = rules
+		}
 	}
 
 	return nil

@@ -4,7 +4,6 @@ package main
 import "C"
 
 import (
-	"strings"
 	"time"
 	"unsafe"
 
@@ -48,9 +47,7 @@ func subscribeLogcat(remote unsafe.Pointer) {
 		defer log.UnSubscribe(sub)
 
 		for msg := range sub {
-			if msg.LogLevel < log.Level() &&
-				!strings.HasPrefix(msg.Payload, "[APP]") &&
-				!strings.Contains(msg.Payload, "To start this tsnet server") {
+			if !shouldForwardLogcat(msg.Payload, msg.LogLevel) {
 				continue
 			}
 

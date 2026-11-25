@@ -97,6 +97,9 @@ func TestPatchOverrideInjectsTailscaleProxy(t *testing.T) {
 	if cfg.Proxy[0]["state-dir"] != "tailscale/ts-test" {
 		t.Fatalf("state-dir = %v, want tailscale/ts-test", cfg.Proxy[0]["state-dir"])
 	}
+	if len(cfg.Rule) != 1 || cfg.Rule[0] != "IP-CIDR,100.64.0.0/10,ts-test,no-resolve" {
+		t.Fatalf("rules = %#v, want Tailscale route first", cfg.Rule)
+	}
 }
 
 func TestPatchOverrideSkipsDisabledTailscale(t *testing.T) {
