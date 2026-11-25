@@ -190,9 +190,15 @@ class MainActivity : ComponentActivity() {
     }
     val external = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val uri = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && uri != null) model.launchAction {
-            val id = model.repository.create(Profile.Type.External, result.data?.getStringExtra(Intents.EXTRA_NAME) ?: "Subscription", uri.toString())
-            nav.navigate("edit/$id")
+        if (result.resultCode == Activity.RESULT_OK && uri != null) {
+            val takeFlags = result.data?.flags?.and(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) ?: 0
+            val persisted = takeFlags != 0 && runCatching {
+                activity.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            }.isSuccess
+            if (persisted) model.launchAction {
+                val id = model.repository.create(Profile.Type.External, result.data?.getStringExtra(Intents.EXTRA_NAME) ?: "Subscription", uri.toString())
+                nav.navigate("edit/$id")
+            } else model.message("Unable to persist profile URI permission")
         }
     }
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
