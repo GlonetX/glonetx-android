@@ -266,8 +266,10 @@ internal object BackupArchive {
                     }
                     atomicWrite(File(root(context), "restore-journal.json"), json.encodeToString(journal.copy(phase = "Committed")))
                     rescheduleRestoredProfiles(context, old)
-                    check(File(root(context), "restore-journal.json").delete()) { "Cannot finish restore recovery" }
                     rollback.deleteRecursively()
+                    val journalFile = File(root(context), "restore-journal.json")
+                    check(journalFile.delete()) { "Cannot finish restore recovery" }
+                    File(journalFile.path + ".bak").delete()
                 }
             } catch (e: Throwable) {
                 withContext(NonCancellable) {
@@ -283,27 +285,40 @@ internal object BackupArchive {
     /** Called under maintenance gate before any normal data entrypoint. */
     suspend fun recover(context: Context) {
         val journalFile = File(root(context), "restore-journal.json")
-        if (!journalFile.exists() && !File(journalFile.path + ".bak").exists()) return
+        val rollback = File(root(context), "rollback")
+        if (!journalFile.exists() && !File(journalFile.path + ".bak").exists()) {
+            cleanupOrphanedRollback(root(context))
+            return
+        }
         DataMaintenanceCoordinator.restoreInProgress = true
         try {
             val journal = json.decodeFromString<RestoreJournal>(readLimited(journalFile, BackupLimits.METADATA))
-            val rollback = File(root(context), "rollback")
-            val old = readSnapshot(File(rollback, "snapshot.json"))
+            val old = File(rollback, "snapshot.json").takeIf(File::isFile)?.let(::readSnapshot)
             if (journal.phase != "Committed") {
+                val snapshot = checkNotNull(old) { "Missing restore rollback snapshot" }
                 for ((kind, existed) in listOf("imported" to journal.importedExisted, "pending" to journal.pendingExisted)) {
                     val preserved = File(rollback, kind); val live = File(context.filesDir, kind)
                     if (preserved.exists()) { check(!live.exists() || live.deleteRecursively()); check(preserved.renameTo(live)) { "Cannot roll back profile files" } }
                     else if (!existed) check(!live.exists() || live.deleteRecursively())
                 }
-                replaceRows(old)
-                SettingsManager.get(context).importRecoverySettings(old.settings)
-                commitActive(context, old.activeProfile)
-                if (journal.overrideExisted) atomicWrite(overrideFile(context), old.override) else overrideFile(context).delete()
+                replaceRows(snapshot)
+                SettingsManager.get(context).importRecoverySettings(snapshot.settings)
+                commitActive(context, snapshot.activeProfile)
+                if (journal.overrideExisted) atomicWrite(overrideFile(context), snapshot.override) else overrideFile(context).delete()
+                rescheduleRestoredProfiles(context, snapshot)
+            } else if (old != null) {
+                // Committed recovery only needs the rollback snapshot to finish
+                // rescheduling; it must still complete after rollback cleanup.
+                rescheduleRestoredProfiles(context, old)
             }
-            rescheduleRestoredProfiles(context, old)
             check(journalFile.delete()) { "Cannot finish restore recovery" }
+            File(journalFile.path + ".bak").delete()
             rollback.deleteRecursively()
         } finally { DataMaintenanceCoordinator.restoreInProgress = false }
+    }
+
+    internal fun cleanupOrphanedRollback(root: File) {
+        check(File(root, "rollback").deleteRecursively()) { "Cannot clean orphaned restore rollback data" }
     }
 
     private suspend fun rescheduleRestoredProfiles(context: Context, old: BackupSnapshot) {
