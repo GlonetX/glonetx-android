@@ -32,8 +32,8 @@ import java.text.DateFormat
     if(confirm)ConfirmDialog(text("Delete saved logs?","删除已保存日志？"),text("This cannot be undone.","此操作无法撤销。"),{confirm=false}){confirm=false;model.action{model.repository.deleteAll();model.files.value=model.repository.files()}}
 }
 
-@Composable fun LogViewerScreen(name:String,onBack:()->Unit,model:LogsViewModel=viewModel()){
-    val messages by model.messages.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var query by rememberSaveable{mutableStateOf("")};var paused by rememberSaveable{mutableStateOf(false)};var level by rememberSaveable{mutableStateOf("Debug")};var confirm by remember{mutableStateOf(false)}
+@Composable fun LogViewerScreen(name:String,onBack:()->Unit,query:String,onQueryChange:(String)->Unit,model:LogsViewModel=viewModel()){
+    val messages by model.messages.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var paused by rememberSaveable{mutableStateOf(false)};var level by rememberSaveable{mutableStateOf("Debug")};var confirm by remember{mutableStateOf(false)}
     val list=rememberLazyListState();var follow by rememberSaveable{mutableStateOf(true)}
     val filtered=messages.filter{it.message.contains(query,true)&&(level=="Debug"||it.level.ordinal>=(runCatching{LogMessage.Level.valueOf(level)}.getOrDefault(LogMessage.Level.Debug)).ordinal)}
     val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")){uri->if(uri!=null)model.export(uri,filtered)}
@@ -41,7 +41,6 @@ import java.text.DateFormat
     DisposableEffect(Unit){onDispose{model.pause()}}
     LaunchedEffect(filtered.size,follow){if(follow&&filtered.isNotEmpty())list.animateScrollToItem(filtered.lastIndex+3)}
     LazyColumn(state=list,contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-        item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Search messages","搜索日志"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})}
         item{InfoCard(text("Messages","日志"),"${text("Showing","显示")} ${filtered.size} / ${messages.size}",icon=Icons.Default.Article)}
         item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){if(name=="live")FilterChip(paused,{paused=!paused},label={Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(if(paused)Icons.Default.PlayArrow else Icons.Default.Pause,null,Modifier.size(14.dp));Text(text("Pause","暂停"))}});FilterChip(follow,{follow=!follow},label={Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){Icon(Icons.Default.KeyboardArrowDown,null,Modifier.size(14.dp));Text(text("Follow","跟随"))}});TextButton(onClick={export.launch(if(name=="live")"glonetx-live.log"else name)}){Icon(Icons.Default.SaveAlt,null);Text(text("Export","导出"))};TextButton(onClick={confirm=true}){Icon(if(name=="live")Icons.Default.Stop else Icons.Default.Delete,null);Text(if(name=="live")text("Stop","停止")else text("Delete","删除"))}}}
         item{

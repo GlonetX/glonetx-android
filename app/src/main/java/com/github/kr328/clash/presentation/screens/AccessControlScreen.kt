@@ -18,9 +18,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.kr328.clash.presentation.AccessControlViewModel
 import com.github.kr328.clash.service.settings.*
 
-@Composable fun AccessControlScreen(snapshot:SettingsSnapshot,onRuntime:((RuntimeSettings)->RuntimeSettings)->Unit,onUi:((UiPreferences)->UiPreferences)->Unit,model:AccessControlViewModel=viewModel()){
+@Composable fun AccessControlScreen(snapshot:SettingsSnapshot,onRuntime:((RuntimeSettings)->RuntimeSettings)->Unit,onUi:((UiPreferences)->UiPreferences)->Unit,query:String,onQueryChange:(String)->Unit,model:AccessControlViewModel=viewModel()){
     val apps by model.apps.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();val prefs=snapshot.ui;val selected=snapshot.desired.accessControlPackages
-    var query by rememberSaveable{mutableStateOf("")};val clipboard=LocalClipboardManager.current
+    val clipboard=LocalClipboardManager.current
     var filtered=apps.filter{(prefs.accessControlSystemApp||!it.system)&&(it.label.contains(query,true)||it.packageName.contains(query,true))}
     filtered=when(prefs.accessControlSort){"PackageName"->filtered.sortedBy{it.packageName};"InstallTime"->filtered.sortedByDescending{it.installed};"UpdateTime"->filtered.sortedByDescending{it.updated};else->filtered.sortedBy{it.label.lowercase()}}
     if(prefs.accessControlReverse)filtered=filtered.reversed()
@@ -45,7 +45,6 @@ import com.github.kr328.clash.service.settings.*
                 }
             }
         }
-        item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Search apps","搜索应用"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})}
         item{Row{FilterChip(prefs.accessControlSystemApp,{onUi{it.copy(accessControlSystemApp=!it.accessControlSystemApp)}},label={Text(text("System apps","系统应用"))});TextButton(onClick={onUi{it.copy(accessControlSort=when(it.accessControlSort){"Label"->"PackageName";"PackageName"->"InstallTime";"InstallTime"->"UpdateTime";else->"Label"})}}){Text(when(prefs.accessControlSort){"PackageName"->text("Package","包名");"InstallTime"->text("Installed","安装时间");"UpdateTime"->text("Updated","更新时间");else->text("Name","名称")});Icon(Icons.Default.Sort,null)};TextButton(onClick={onUi{it.copy(accessControlReverse=!it.accessControlReverse)}}){Icon(if(prefs.accessControlReverse)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,null);Text(text("Reverse","倒序"))}}}
         item{Row{TextButton(onClick={onRuntime{it.copy(accessControlPackages=selected+filtered.map{a->a.packageName})}}){Icon(Icons.Default.SelectAll,null);Text(text("All","全选"))};TextButton(onClick={onRuntime{it.copy(accessControlPackages=emptySet())}}){Icon(Icons.Default.Deselect,null);Text(text("None","清空"))};TextButton(onClick={val names=filtered.map{it.packageName}.toSet();onRuntime{it.copy(accessControlPackages=(selected-names)+(names-selected))}}){Icon(Icons.Default.Flip,null);Text(text("Invert","反选"))};TextButton(onClick={clipboard.setText(AnnotatedString(selected.joinToString("\n")))}){Icon(Icons.Default.ContentCopy,null);Text(text("Copy","复制"))};TextButton(onClick={val names=clipboard.getText()?.text.orEmpty().lines().map{it.trim()}.toSet().intersect(apps.map{it.packageName}.toSet());onRuntime{it.copy(accessControlPackages=names)}}){Icon(Icons.Default.ContentPaste,null);Text(text("Paste","粘贴"))}}}
         if(error!=null)item{Text(error!!,color=MaterialTheme.colorScheme.error)}

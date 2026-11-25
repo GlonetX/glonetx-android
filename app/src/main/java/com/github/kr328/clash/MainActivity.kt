@@ -218,6 +218,9 @@ class MainActivity : ComponentActivity() {
     val snackbar = remember { SnackbarHostState() }
     var proxyQuery by rememberSaveable { mutableStateOf("") }
     var profileQuery by rememberSaveable { mutableStateOf("") }
+    var accessQuery by rememberSaveable { mutableStateOf("") }
+    var logQuery by rememberSaveable { mutableStateOf("") }
+    var connectionQuery by rememberSaveable { mutableStateOf("") }
     var proxyMenu by remember { mutableStateOf(false) }
     var release by remember { mutableStateOf<AppUpdate.Release?>(null) }
     var updateBusy by remember { mutableStateOf(false) }
@@ -480,6 +483,21 @@ class MainActivity : ComponentActivity() {
                             Icon(Icons.Default.Add, text("Add", "添加"))
                         }
                     }
+                    "access" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text("Access control", "访问控制"), style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(12.dp))
+                        TopBarSearchField(accessQuery, { accessQuery = it }, text("Search apps", "搜索应用"), Modifier.weight(1f))
+                    }
+                    "log" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text("Logs", "日志"), style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(12.dp))
+                        TopBarSearchField(logQuery, { logQuery = it }, text("Search messages", "搜索日志"), Modifier.weight(1f))
+                    }
+                    "connections" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text("Connections", "活动连接"), style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(12.dp))
+                        TopBarSearchField(connectionQuery, { connectionQuery = it }, text("Host, process, rule…", "主机、进程、规则…"), Modifier.weight(1f))
+                    }
                     "home" -> Text("GlonetX")
                     "settings" -> Text(text("Settings", "设置"))
                     "override" -> Text(text("Configuration overrides", "配置覆盖"))
@@ -526,16 +544,16 @@ class MainActivity : ComponentActivity() {
                 composable("edit/{id}") { e -> ProfileEditorScreen(e.arguments?.getString("id").orEmpty(), { nav.popBackStack() }, { nav.navigate("files/$it") }) }
                 composable("files/{id}") { e -> FilesScreen(e.arguments?.getString("id").orEmpty(), { nav.popBackStack() }) }
                 composable("providers") { ProvidersScreen() }
-                composable("connections") { ConnectionsScreen(prefs, model::updateUi) }
+                composable("connections") { ConnectionsScreen(prefs, model::updateUi, connectionQuery, { connectionQuery = it }) }
                 composable("quality") { QualityScreen() }
                 composable("latency") { LatencyScreen(prefs, model::updateUi) }
                 composable("backup") { BackupScreen() }
-                composable("access") { snapshot?.let { AccessControlScreen(it, model::updateRuntime, model::updateUi) } }
+                composable("access") { snapshot?.let { AccessControlScreen(it, model::updateRuntime, model::updateUi, accessQuery, { accessQuery = it }) } }
                 composable("override") { OverrideScreen(false, { nav.popBackStack() }) }
                 composable("meta-feature") { KernelFeaturesScreen({ nav.popBackStack() }) }
                 composable("tailscale") { TailscaleScreen(onBack = { nav.popBackStack() }, onOpenLogs = { nav.navigate("log/live") }) }
                 composable("logs") { LogsScreen(onOpen = { name -> nav.navigate("log/${Uri.encode(name)}") }) }
-                composable("log/{name}") { e -> LogViewerScreen(e.arguments?.getString("name").orEmpty(), { nav.popBackStack() }) }
+                composable("log/{name}") { e -> LogViewerScreen(e.arguments?.getString("name").orEmpty(), { nav.popBackStack() }, logQuery, { logQuery = it }) }
                 composable("help") { HelpScreen { openLink(it) } }
                 composable("about") { AboutScreen("${activity.packageManager.getPackageInfo(activity.packageName, 0).versionName}\n${Bridge.nativeCoreVersion()}") { openLink(it) } }
             }

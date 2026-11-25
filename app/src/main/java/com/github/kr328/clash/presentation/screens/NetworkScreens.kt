@@ -108,8 +108,8 @@ import java.util.Date
     }
 }
 
-@Composable fun ConnectionsScreen(prefs:UiPreferences,onPrefs:((UiPreferences)->UiPreferences)->Unit,model:FeatureViewModel=viewModel()) {
-    val list by model.connections.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var query by rememberSaveable{mutableStateOf("")};var selected by remember{mutableStateOf<ConnectionItem?>(null)};var confirmAll by remember{mutableStateOf(false)};var paused by rememberSaveable{mutableStateOf(false)}
+@Composable fun ConnectionsScreen(prefs:UiPreferences,onPrefs:((UiPreferences)->UiPreferences)->Unit,query:String,onQueryChange:(String)->Unit,model:FeatureViewModel=viewModel()) {
+    val list by model.connections.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var selected by remember{mutableStateOf<ConnectionItem?>(null)};var confirmAll by remember{mutableStateOf(false)};var paused by rememberSaveable{mutableStateOf(false)}
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(paused, prefs.lightweightMode, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -120,7 +120,6 @@ import java.util.Date
     rows=when(prefs.connectionsSort){"Time"->rows.sortedByDescending{it.start};"Name"->rows.sortedBy{it.host};else->rows.sortedByDescending{it.upload+it.download}}
     if(prefs.connectionsSortReversed)rows=rows.reversed()
     LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        item{OutlinedTextField(query,{query=it},Modifier.fillMaxWidth(),label={Text(text("Host, process, rule…","主机、进程、规则…"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})}
         item{InfoCard(text("Active connections","活动连接"),"${list.size} ${text("connections","个连接")}",icon=Icons.Default.Lan)}
         item{Row{FilterChip(paused,{paused=!paused},label={Text(text("Pause","暂停"))});Spacer(Modifier.width(8.dp));FilterChip(prefs.connectionsGroupByProcess,{onPrefs{it.copy(connectionsGroupByProcess=!it.connectionsGroupByProcess)}},label={Text(text("Group","分组"))});TextButton(onClick={onPrefs{it.copy(connectionsSort=when(it.connectionsSort){"Size"->"Time";"Time"->"Name";else->"Size"})}}){Text(when(prefs.connectionsSort){"Time"->text("Time","时间");"Name"->text("Name","名称");else->text("Size","大小")});Icon(if(prefs.connectionsSortReversed)Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,null)};IconButton(onClick={onPrefs{it.copy(connectionsSortReversed=!it.connectionsSortReversed)}}){Icon(Icons.Default.Sort,null)}}}
         item{TextButton(onClick={confirmAll=true},enabled=list.isNotEmpty()){Icon(Icons.Default.Close,null);Text("${text("Close all connections","关闭所有连接")} (${list.size})")}}
