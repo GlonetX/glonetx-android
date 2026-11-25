@@ -32,9 +32,9 @@ import com.github.kr328.clash.service.settings.SubscriptionAnnotation
 import java.text.DateFormat
 import java.util.Date
 
-@Composable fun ProfilesScreen(onEdit: (String)->Unit, onCreate: ()->Unit, preferences: UiPreferences, onPreferences: ((UiPreferences)->UiPreferences)->Unit, model: FeatureViewModel = viewModel()) {
+@Composable fun ProfilesScreen(onEdit: (String)->Unit, onCreate: ()->Unit, preferences: UiPreferences, query: String, onPreferences: ((UiPreferences)->UiPreferences)->Unit, model: FeatureViewModel = viewModel()) {
     val profiles by model.profiles.collectAsStateWithLifecycle(); val busy by model.busy.collectAsStateWithLifecycle(); val error by model.error.collectAsStateWithLifecycle()
-    var query by rememberSaveable { mutableStateOf("") }; var deleting by remember { mutableStateOf<Profile?>(null) }
+    var deleting by remember { mutableStateOf<Profile?>(null) }
     var sharing by remember { mutableStateOf<Profile?>(null) }
     var annotating by remember { mutableStateOf<Profile?>(null) }
     val context = LocalContext.current
@@ -55,11 +55,6 @@ import java.util.Date
         },
     ) { inner ->
         LazyColumn(Modifier.fillMaxSize().padding(inner), contentPadding=PaddingValues(start=20.dp,end=20.dp,top=20.dp,bottom=96.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            item { Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.End, verticalAlignment=Alignment.CenterVertically) {
-                OutlinedTextField(query,{query=it},Modifier.width(220.dp).height(48.dp),placeholder={Text(text("Search subscriptions","搜索订阅"))},singleLine=true,leadingIcon={Icon(Icons.Default.Search,null)})
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick=onCreate){Icon(Icons.Default.Add,text("Add","添加"))}
-            } }
             if(error!=null) item { ErrorState(error!!){model.loadProfiles()} }
             if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }

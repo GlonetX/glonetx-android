@@ -124,7 +124,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun ProxySearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+@Composable private fun TopBarSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
     BasicTextField(
         value = query,
@@ -142,7 +147,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text(text("Search nodes", "搜索节点"), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                        Text(placeholder, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
                     innerTextField()
                 }
@@ -212,6 +217,7 @@ class MainActivity : ComponentActivity() {
     }
     val snackbar = remember { SnackbarHostState() }
     var proxyQuery by rememberSaveable { mutableStateOf("") }
+    var profileQuery by rememberSaveable { mutableStateOf("") }
     var proxyMenu by remember { mutableStateOf(false) }
     var release by remember { mutableStateOf<AppUpdate.Release?>(null) }
     var updateBusy by remember { mutableStateOf(false) }
@@ -458,12 +464,20 @@ class MainActivity : ComponentActivity() {
                     "proxy" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(text("Proxies", "代理"), style = MaterialTheme.typography.titleLarge)
                         Spacer(Modifier.width(12.dp))
-                        ProxySearchField(proxyQuery, { proxyQuery = it }, Modifier.weight(1f))
+                        TopBarSearchField(proxyQuery, { proxyQuery = it }, text("Search nodes", "搜索节点"), Modifier.weight(1f))
                         Box {
                             IconButton(onClick = { proxyMenu = true }) {
                                 Icon(Icons.Default.Tune, text("Display options", "显示选项"))
                             }
                             ProxyOptionsMenu(proxyMenu, { proxyMenu = false }, prefs, model::updateUi)
+                        }
+                    }
+                    "profiles" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Profiles", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(12.dp))
+                        TopBarSearchField(profileQuery, { profileQuery = it }, text("Search subscriptions", "搜索订阅"), Modifier.weight(1f))
+                        IconButton(onClick = { nav.navigate("new-profile") }) {
+                            Icon(Icons.Default.Add, text("Add", "添加"))
                         }
                     }
                     "home" -> Text("GlonetX")
@@ -504,7 +518,7 @@ class MainActivity : ComponentActivity() {
                         onBatterySettings = { runCatching { activity.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }.onFailure { model.message(it.message ?: "Unable to open battery settings") } },
                         onPermission = { onGranted -> requestLocationPermission(onGranted) })
                 } }
-                composable("profiles") { ProfilesScreen({ nav.navigate("edit/$it") }, { nav.navigate("new-profile") }, prefs, model::updateUi) }
+                composable("profiles") { ProfilesScreen({ nav.navigate("edit/$it") }, { nav.navigate("new-profile") }, prefs, profileQuery, model::updateUi) }
                 composable("new-profile") { NewProfileScreen({ nav.navigate("edit/$it") }, { scan.launch(null) }, { file.launch(arrayOf("*/*")) }, { runCatching { external.launch(Intent(Intents.ACTION_PROVIDE_URL)) }.onFailure { model.message(it.message ?: "No profile providers installed") } }) }
                 composable("edit/{id}") { e -> ProfileEditorScreen(e.arguments?.getString("id").orEmpty(), { nav.popBackStack() }, { nav.navigate("files/$it") }) }
                 composable("files/{id}") { e -> FilesScreen(e.arguments?.getString("id").orEmpty(), { nav.popBackStack() }) }
