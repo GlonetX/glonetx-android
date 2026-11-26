@@ -175,9 +175,9 @@ jobs:
           set -euo pipefail
           # The release tag points to the exact committed sources that were built.
           cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
-          GlonetX 12.12.2 migrates the Android interface to Jetpack Compose and updates settings, network privacy, and encrypted backup handling.
+          GlonetX 12.13.0 adds Tailscale integration, a redesigned Compose dashboard and proxy controls, expanded network and kernel settings, and hardened encrypted backup, restore, update, and release-signing flows.
 
-          Validation covered Android 6.0 and API 37 emulators, VPN startup and shutdown, credential migration, backup components, and simulated restore-journal recovery. Real process termination or power-loss recovery, dual-stack and Wi-Fi policy packet captures, uninterrupted VPN forwarding during backup, and the complete accessibility and large-data performance matrix remain unverified.
+          See CHANGELOG.md for the full 12.13.0 change list.
           EOF
           git tag "$RELEASE_TAG" "$GITHUB_SHA"
           git push origin "refs/tags/$RELEASE_TAG"

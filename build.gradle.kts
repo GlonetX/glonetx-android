@@ -60,8 +60,8 @@ subprojects {
             minSdk = 23
             targetSdk = 35
 
-            versionName = "12.12.2"
-            versionCode = 121200201
+            versionName = "12.13.0"
+            versionCode = 121300001
 
             resValue("string", "release_name", "v$versionName")
             resValue("integer", "release_code", "$versionCode")
@@ -128,7 +128,7 @@ subprojects {
                 resValue("string", "application_name", "@string/application_name_meta")
 
                 // No id or version suffix: this flavor is the stable release and
-                // ships as io.github.glonetx.android, versionName 12.12.2.
+                // ships as io.github.glonetx.android, versionName 12.13.0.
             }
         }
 
