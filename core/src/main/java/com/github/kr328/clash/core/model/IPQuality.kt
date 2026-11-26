@@ -18,6 +18,7 @@ data class IPQuality(
     @SerialName("ipApiHosting") val ipApiHosting: String? = null,
     @SerialName("ipApiMobile") val ipApiMobile: String? = null,
     @SerialName("ipApiISP") val ipApiISP: String? = null,
+    @SerialName("sources") val sources: List<IPQualitySource> = emptyList(),
 ) : Parcelable {
     constructor(parcel: Parcel) : this(
         parcel.readString()!!,
@@ -31,6 +32,7 @@ data class IPQuality(
         parcel.readString(),
         parcel.readString(),
         parcel.readString(),
+        parcel.createTypedArray(IPQualitySource.CREATOR)?.toList().orEmpty(),
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
@@ -45,6 +47,7 @@ data class IPQuality(
         parcel.writeString(ipApiHosting)
         parcel.writeString(ipApiMobile)
         parcel.writeString(ipApiISP)
+        parcel.writeTypedList(sources)
     }
 
     override fun describeContents(): Int {

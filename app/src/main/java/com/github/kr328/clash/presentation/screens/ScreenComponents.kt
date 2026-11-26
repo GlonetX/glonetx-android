@@ -162,3 +162,22 @@ fun simplifyIpAddress(address: String): String {
         address
     }
 }
+
+fun compactIpAddress(address: String): String {
+    val full = simplifyIpAddress(address)
+    if (!address.contains(':') || full.length <= 18) return full
+    val halves = full.split("::", limit = 2)
+    val left = halves[0].split(':').filter { it.isNotEmpty() }.take(2).joinToString(":")
+    val right = if (halves.size > 1) {
+        halves[1].split(':').filter { it.isNotEmpty() }.takeLast(2).joinToString(":")
+    } else {
+        full.split(':').takeLast(2).joinToString(":")
+    }
+    val compact = when {
+        left.isEmpty() && right.isEmpty() -> full
+        left.isEmpty() -> "…:$right"
+        right.isEmpty() -> "$left:…"
+        else -> "$left:…:$right"
+    }
+    return if (compact.length < full.length) "[$compact]" else full
+}

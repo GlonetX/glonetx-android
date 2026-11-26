@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,15 +30,31 @@ type IPQuality struct {
 	IP  string `json:"ip"`
 	ASN string `json:"asn,omitempty"`
 
-	ScamalyticsScore string `json:"scamalyticsScore,omitempty"`
-	ScamalyticsRisk  string `json:"scamalyticsRisk,omitempty"`
-	ProxyCheckRisk   string `json:"proxyCheckRisk,omitempty"`
-	ProxyCheckProxy  string `json:"proxyCheckProxy,omitempty"`
-	ProxyCheckType   string `json:"proxyCheckType,omitempty"`
-	IPApiProxy       string `json:"ipApiProxy,omitempty"`
-	IPApiHosting     string `json:"ipApiHosting,omitempty"`
-	IPApiMobile      string `json:"ipApiMobile,omitempty"`
-	IPApiISP         string `json:"ipApiISP,omitempty"`
+	ScamalyticsScore string            `json:"scamalyticsScore,omitempty"`
+	ScamalyticsRisk  string            `json:"scamalyticsRisk,omitempty"`
+	ProxyCheckRisk   string            `json:"proxyCheckRisk,omitempty"`
+	ProxyCheckProxy  string            `json:"proxyCheckProxy,omitempty"`
+	ProxyCheckType   string            `json:"proxyCheckType,omitempty"`
+	IPApiProxy       string            `json:"ipApiProxy,omitempty"`
+	IPApiHosting     string            `json:"ipApiHosting,omitempty"`
+	IPApiMobile      string            `json:"ipApiMobile,omitempty"`
+	IPApiISP         string            `json:"ipApiISP,omitempty"`
+	Sources          []IPQualitySource `json:"sources,omitempty"`
+}
+
+type IPQualitySource struct {
+	Name      string  `json:"name"`
+	Country   string  `json:"country,omitempty"`
+	Region    string  `json:"region,omitempty"`
+	City      string  `json:"city,omitempty"`
+	ISP       string  `json:"isp,omitempty"`
+	ASN       string  `json:"asn,omitempty"`
+	Risk      string  `json:"risk,omitempty"`
+	Proxy     string  `json:"proxy,omitempty"`
+	Hosting   string  `json:"hosting,omitempty"`
+	Type      string  `json:"type,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
 }
 
 var (
@@ -197,6 +215,159 @@ func fetchIPApi(ctx context.Context, ip string) (ipApiResult, error) {
 	}, nil
 }
 
+func fetchIPWhoIs(ctx context.Context, ip string) (IPQualitySource, error) {
+	body, status, err := httpGet(ctx, "https://ipwho.is/"+ip)
+	if err != nil {
+		return IPQualitySource{}, err
+	}
+	if status != http.StatusOK {
+		return IPQualitySource{}, fmt.Errorf("ipwho.is: status %d", status)
+	}
+	var raw struct {
+		Success    bool    `json:"success"`
+		Message    string  `json:"message"`
+		Type       string  `json:"type"`
+		Country    string  `json:"country"`
+		Region     string  `json:"region"`
+		City       string  `json:"city"`
+		Latitude   float64 `json:"latitude"`
+		Longitude  float64 `json:"longitude"`
+		Connection struct {
+			ASN int    `json:"asn"`
+			Org string `json:"org"`
+			ISP string `json:"isp"`
+		} `json:"connection"`
+		Security struct {
+			Proxy   bool `json:"proxy"`
+			VPN     bool `json:"vpn"`
+			Tor     bool `json:"tor"`
+			Hosting bool `json:"hosting"`
+		} `json:"security"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return IPQualitySource{}, err
+	}
+	if !raw.Success {
+		return IPQualitySource{}, fmt.Errorf("ipwho.is: %s", raw.Message)
+	}
+	asn := ""
+	if raw.Connection.ASN != 0 {
+		asn = fmt.Sprintf("AS%d", raw.Connection.ASN)
+		if raw.Connection.Org != "" {
+			asn += " " + raw.Connection.Org
+		}
+	}
+	isp := raw.Connection.ISP
+	if isp == "" {
+		isp = raw.Connection.Org
+	}
+	risk := ""
+	if raw.Security.Proxy || raw.Security.VPN || raw.Security.Tor {
+		risk = "proxy"
+	} else if raw.Security.Hosting {
+		risk = "hosting"
+	}
+	return IPQualitySource{
+		Name:      "ipwho.is",
+		Country:   raw.Country,
+		Region:    raw.Region,
+		City:      raw.City,
+		ISP:       isp,
+		ASN:       asn,
+		Risk:      risk,
+		Proxy:     boolText(raw.Security.Proxy || raw.Security.VPN || raw.Security.Tor),
+		Hosting:   boolText(raw.Security.Hosting),
+		Type:      raw.Type,
+		Latitude:  raw.Latitude,
+		Longitude: raw.Longitude,
+	}, nil
+}
+
+func fetchIPAPICo(ctx context.Context, ip string) (IPQualitySource, error) {
+	body, status, err := httpGet(ctx, "https://ipapi.co/"+ip+"/json/")
+	if err != nil {
+		return IPQualitySource{}, err
+	}
+	if status != http.StatusOK {
+		return IPQualitySource{}, fmt.Errorf("ipapi.co: status %d", status)
+	}
+	var raw struct {
+		Error       bool    `json:"error"`
+		Reason      string  `json:"reason"`
+		IP          string  `json:"ip"`
+		Version     string  `json:"version"`
+		City        string  `json:"city"`
+		Region      string  `json:"region"`
+		Country     string  `json:"country"`
+		CountryName string  `json:"country_name"`
+		ASN         string  `json:"asn"`
+		Org         string  `json:"org"`
+		Latitude    float64 `json:"latitude"`
+		Longitude   float64 `json:"longitude"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return IPQualitySource{}, err
+	}
+	if raw.Error {
+		return IPQualitySource{}, fmt.Errorf("ipapi.co: %s", raw.Reason)
+	}
+	country := raw.CountryName
+	if country == "" {
+		country = raw.Country
+	}
+	return IPQualitySource{
+		Name:      "ipapi.co",
+		Country:   country,
+		Region:    raw.Region,
+		City:      raw.City,
+		ASN:       raw.ASN,
+		ISP:       raw.Org,
+		Type:      raw.Version,
+		Latitude:  raw.Latitude,
+		Longitude: raw.Longitude,
+	}, nil
+}
+
+func fetchIPInfoIO(ctx context.Context, ip string) (IPQualitySource, error) {
+	body, status, err := httpGet(ctx, "https://ipinfo.io/"+ip+"/json")
+	if err != nil {
+		return IPQualitySource{}, err
+	}
+	if status != http.StatusOK {
+		return IPQualitySource{}, fmt.Errorf("ipinfo.io: status %d", status)
+	}
+	var raw struct {
+		IP       string `json:"ip"`
+		City     string `json:"city"`
+		Region   string `json:"region"`
+		Country  string `json:"country"`
+		Loc      string `json:"loc"`
+		Org      string `json:"org"`
+		Timezone string `json:"timezone"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return IPQualitySource{}, err
+	}
+	if raw.IP == "" {
+		return IPQualitySource{}, fmt.Errorf("ipinfo.io: empty response")
+	}
+	latitude, longitude := 0.0, 0.0
+	if parts := strings.Split(raw.Loc, ","); len(parts) == 2 {
+		fmt.Sscanf(parts[0], "%f", &latitude)
+		fmt.Sscanf(parts[1], "%f", &longitude)
+	}
+	return IPQualitySource{
+		Name:      "ipinfo.io",
+		Country:   raw.Country,
+		Region:    raw.Region,
+		City:      raw.City,
+		ASN:       raw.Org,
+		ISP:       raw.Org,
+		Latitude:  latitude,
+		Longitude: longitude,
+	}, nil
+}
+
 // QueryIPQuality queries aggregated IP intelligence for the given IP.
 // An empty ip resolves the current exit IP through the tunnel first.
 func QueryIPQuality(ip string) (string, error) {
@@ -216,10 +387,14 @@ func QueryIPQuality(ip string) (string, error) {
 		scam                      scamalyticsResult
 		check                     proxyCheckResult
 		api                       ipApiResult
+		who                       IPQualitySource
+		co                        IPQualitySource
+		info                      IPQualitySource
 		scamErr, checkErr, apiErr error
+		whoErr, coErr, infoErr    error
 	)
 
-	wg.Add(3)
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		scam, scamErr = fetchScamalytics(ctx, target)
@@ -232,11 +407,23 @@ func QueryIPQuality(ip string) (string, error) {
 		defer wg.Done()
 		api, apiErr = fetchIPApi(ctx, target)
 	}()
+	go func() {
+		defer wg.Done()
+		who, whoErr = fetchIPWhoIs(ctx, target)
+	}()
+	go func() {
+		defer wg.Done()
+		co, coErr = fetchIPAPICo(ctx, target)
+	}()
+	go func() {
+		defer wg.Done()
+		info, infoErr = fetchIPInfoIO(ctx, target)
+	}()
 	wg.Wait()
 
 	// at least one source must succeed
-	if scamErr != nil && checkErr != nil && apiErr != nil {
-		errs := []string{scamErr.Error(), checkErr.Error(), apiErr.Error()}
+	if scamErr != nil && checkErr != nil && apiErr != nil && whoErr != nil && coErr != nil && infoErr != nil {
+		errs := []string{scamErr.Error(), checkErr.Error(), apiErr.Error(), whoErr.Error(), coErr.Error(), infoErr.Error()}
 		return "", fmt.Errorf("all sources failed: %s", strings.Join(errs, "; "))
 	}
 
@@ -245,12 +432,19 @@ func QueryIPQuality(ip string) (string, error) {
 	if scamErr == nil {
 		quality.ScamalyticsScore = scam.score
 		quality.ScamalyticsRisk = scam.risk
+		quality.Sources = append(quality.Sources, IPQualitySource{Name: "Scamalytics", Risk: scam.risk})
 	}
 
 	if checkErr == nil {
 		quality.ProxyCheckRisk = check.risk
 		quality.ProxyCheckProxy = check.proxy
 		quality.ProxyCheckType = check.typ
+		quality.Sources = append(quality.Sources, IPQualitySource{
+			Name:  "ProxyCheck",
+			Risk:  check.risk,
+			Proxy: check.proxy,
+			Type:  check.typ,
+		})
 	}
 
 	if apiErr == nil {
@@ -259,6 +453,22 @@ func QueryIPQuality(ip string) (string, error) {
 		quality.IPApiMobile = api.mobile
 		quality.ASN = api.as
 		quality.IPApiISP = api.isp
+		quality.Sources = append(quality.Sources, IPQualitySource{
+			Name:    "IP-API",
+			ISP:     api.isp,
+			ASN:     api.as,
+			Proxy:   api.proxy,
+			Hosting: api.hosting,
+		})
+	}
+	if whoErr == nil {
+		quality.Sources = append(quality.Sources, who)
+	}
+	if coErr == nil {
+		quality.Sources = append(quality.Sources, co)
+	}
+	if infoErr == nil {
+		quality.Sources = append(quality.Sources, info)
 	}
 
 	data, err := json.Marshal(quality)
@@ -288,25 +498,113 @@ func TestLatency(url string) int64 {
 	return time.Since(start).Milliseconds()
 }
 
+var serverLocationCache sync.Map
+var serverIPCache sync.Map
+
+func resolveServerIP(ctx context.Context, rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return ""
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
+	if cached, ok := serverIPCache.Load(host); ok {
+		return cached.(string)
+	}
+	resolvers := []string{
+		"https://dns.google/resolve?name=" + url.QueryEscape(host) + "&type=A",
+		"https://cloudflare-dns.com/dns-query?name=" + url.QueryEscape(host) + "&type=A",
+	}
+	for _, endpoint := range resolvers {
+		body, status, err := httpGet(ctx, endpoint)
+		if err != nil || status != http.StatusOK {
+			continue
+		}
+		var response struct {
+			Answer []struct {
+				Type int    `json:"type"`
+				Data string `json:"data"`
+			} `json:"Answer"`
+		}
+		if err := json.Unmarshal(body, &response); err != nil {
+			continue
+		}
+		for _, answer := range response.Answer {
+			if answer.Type == 1 && net.ParseIP(answer.Data) != nil {
+				serverIPCache.Store(host, answer.Data)
+				return answer.Data
+			}
+		}
+	}
+	if addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host); err == nil {
+		for _, address := range addresses {
+			if ipv4 := address.IP.To4(); ipv4 != nil && !(ipv4[0] == 198 && (ipv4[1] == 18 || ipv4[1] == 19)) {
+				serverIPCache.Store(host, address.IP.String())
+				return address.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+func locateServerIP(ctx context.Context, ip string) IPQualitySource {
+	if cached, ok := serverLocationCache.Load(ip); ok {
+		return cached.(IPQualitySource)
+	}
+	source, err := fetchIPWhoIs(ctx, ip)
+	if err != nil {
+		source, err = fetchIPAPICo(ctx, ip)
+	}
+	if err != nil {
+		source, err = fetchIPInfoIO(ctx, ip)
+	}
+	if err == nil {
+		serverLocationCache.Store(ip, source)
+	}
+	return source
+}
+
 // ProbeResult describes the HTTP status and latency of a probed URL.
 type ProbeResult struct {
-	Code    int   `json:"code"`    // HTTP status code; -1 on connection error
-	Latency int64 `json:"latency"` // round-trip in ms; -1 on failure
+	Code      int     `json:"code"`    // HTTP status code; -1 on connection error
+	Latency   int64   `json:"latency"` // round-trip in ms; -1 on failure
+	ServerIP  string  `json:"serverIp,omitempty"`
+	Country   string  `json:"country,omitempty"`
+	City      string  `json:"city,omitempty"`
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
 }
 
 // ProbeURL performs an HTTP GET through the tunnel and reports the final
 // status code (after redirects) with the round-trip latency.
-func ProbeURL(url string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func ProbeURL(rawURL string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	start := time.Now()
-
 	result := ProbeResult{Code: -1, Latency: -1}
+	result.ServerIP = resolveServerIP(ctx, rawURL)
+	populateLocation := func() {
+		if result.ServerIP == "" {
+			return
+		}
+		if location := locateServerIP(ctx, result.ServerIP); location.Name != "" {
+			result.Country = location.Country
+			result.City = location.City
+			result.Latitude = location.Latitude
+			result.Longitude = location.Longitude
+		}
+	}
 
-	response, err := clashHttp.HttpRequest(ctx, url, http.MethodGet,
+	start := time.Now()
+	response, err := clashHttp.HttpRequest(ctx, rawURL, http.MethodGet,
 		http.Header{"User-Agent": {browserUserAgent}}, nil)
 	if err != nil {
+		populateLocation()
 		data, _ := json.Marshal(result)
 		return string(data), nil
 	}
@@ -316,6 +614,7 @@ func ProbeURL(url string) (string, error) {
 
 	result.Code = response.StatusCode
 	result.Latency = time.Since(start).Milliseconds()
+	populateLocation()
 
 	data, err := json.Marshal(result)
 	if err != nil {

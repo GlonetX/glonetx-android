@@ -58,6 +58,7 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import com.github.kr328.clash.common.constants.Intents
+import com.github.kr328.clash.common.compat.versionCodeCompat
 import com.github.kr328.clash.core.bridge.Bridge
 import com.github.kr328.clash.core.model.ProxySort
 import com.github.kr328.clash.core.model.TunnelState
@@ -174,75 +175,89 @@ class MainActivity : ComponentActivity() {
     prefs: UiPreferences,
     onPrefs: ((UiPreferences) -> UiPreferences) -> Unit,
 ) {
+    var page by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(expanded) {
+        if (!expanded) page = null
+    }
     DropdownMenu(expanded, onDismiss) {
-        Text(
-            text("View", "视图"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        DropdownMenuItem(
-            text = { Text(text("Cards", "卡片")) },
-            trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "Grid", onClick = null) },
-            onClick = { onPrefs { it.copy(proxyViewMode = "Grid") }; onDismiss() },
-        )
-        DropdownMenuItem(
-            text = { Text(text("List", "列表")) },
-            trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "List", onClick = null) },
-            onClick = { onPrefs { it.copy(proxyViewMode = "List") }; onDismiss() },
-        )
-        HorizontalDivider()
-        Text(
-            text("Columns", "列数"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        (1..4).forEach { columns ->
+        if (page == null) {
             DropdownMenuItem(
-                text = { Text("$columns") },
-                trailingIcon = { RadioButton(selected = prefs.proxyLine == columns, onClick = null) },
-                onClick = { onPrefs { it.copy(proxyLine = columns) }; onDismiss() },
+                text = { Text(text("View", "视图")) },
+                trailingIcon = { Text(if (prefs.proxyViewMode == "Grid") text("Cards", "卡片") else text("List", "列表")) },
+                onClick = { page = "view" },
             )
-        }
-        HorizontalDivider()
-        Text(
-            text("Sort", "排序"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        ProxySort.values().forEach { sort ->
+            if (prefs.proxyViewMode == "Grid") {
+                DropdownMenuItem(
+                    text = { Text(text("Columns", "列数")) },
+                    trailingIcon = { Text(prefs.proxyLine.toString()) },
+                    onClick = { page = "columns" },
+                )
+            }
             DropdownMenuItem(
-                text = { Text(sort.name) },
-                trailingIcon = { RadioButton(selected = prefs.proxySort == sort.name, onClick = null) },
-                onClick = { onPrefs { it.copy(proxySort = sort.name) }; onDismiss() },
+                text = { Text(text("Sort", "排序")) },
+                trailingIcon = { Text(prefs.proxySort) },
+                onClick = { page = "sort" },
             )
-        }
-        HorizontalDivider()
-        Text(
-            text("Card density", "卡片密度"),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        listOf("Tight", "Standard", "Loose").forEach { density ->
+            if (prefs.proxyViewMode == "Grid") {
+                DropdownMenuItem(
+                    text = { Text(text("Card density", "卡片密度")) },
+                    trailingIcon = { Text(prefs.proxyDensity) },
+                    onClick = { page = "density" },
+                )
+            }
+            HorizontalDivider()
             DropdownMenuItem(
-                text = { Text(density) },
-                trailingIcon = { RadioButton(selected = prefs.proxyDensity == density, onClick = null) },
-                onClick = { onPrefs { it.copy(proxyDensity = density) }; onDismiss() },
+                text = { Text(text(if (prefs.proxyIconStyle == "Flag") "Hide flags" else "Show flags", if (prefs.proxyIconStyle == "Flag") "隐藏旗帜" else "显示旗帜")) },
+                onClick = { onPrefs { it.copy(proxyIconStyle = if (it.proxyIconStyle == "Flag") "None" else "Flag") }; onDismiss() },
             )
+            DropdownMenuItem(
+                text = { Text(text("Selectable groups only", "仅显示可选择分组")) },
+                trailingIcon = { Checkbox(checked = prefs.proxyExcludeNotSelectable, onCheckedChange = null) },
+                onClick = { onPrefs { it.copy(proxyExcludeNotSelectable = !it.proxyExcludeNotSelectable) }; onDismiss() },
+            )
+        } else {
+            DropdownMenuItem(
+                text = { Text(text("Back", "返回")) },
+                leadingIcon = { Icon(Icons.Default.ChevronLeft, null) },
+                onClick = { page = null },
+            )
+            HorizontalDivider()
+            when (page) {
+                "view" -> {
+                    DropdownMenuItem(
+                        text = { Text(text("Cards", "卡片")) },
+                        trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "Grid", onClick = null) },
+                        onClick = { onPrefs { it.copy(proxyViewMode = "Grid") }; onDismiss() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text("List", "列表")) },
+                        trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "List", onClick = null) },
+                        onClick = { onPrefs { it.copy(proxyViewMode = "List") }; onDismiss() },
+                    )
+                }
+                "columns" -> (1..4).forEach { columns ->
+                    DropdownMenuItem(
+                        text = { Text(columns.toString()) },
+                        trailingIcon = { RadioButton(selected = prefs.proxyLine == columns, onClick = null) },
+                        onClick = { onPrefs { it.copy(proxyLine = columns) }; onDismiss() },
+                    )
+                }
+                "sort" -> ProxySort.values().forEach { sort ->
+                    DropdownMenuItem(
+                        text = { Text(sort.name) },
+                        trailingIcon = { RadioButton(selected = prefs.proxySort == sort.name, onClick = null) },
+                        onClick = { onPrefs { it.copy(proxySort = sort.name) }; onDismiss() },
+                    )
+                }
+                "density" -> listOf("Tight", "Standard", "Loose").forEach { density ->
+                    DropdownMenuItem(
+                        text = { Text(density) },
+                        trailingIcon = { RadioButton(selected = prefs.proxyDensity == density, onClick = null) },
+                        onClick = { onPrefs { it.copy(proxyDensity = density) }; onDismiss() },
+                    )
+                }
+            }
         }
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text(text(if (prefs.proxyIconStyle == "Flag") "Hide flags" else "Show flags", if (prefs.proxyIconStyle == "Flag") "隐藏旗帜" else "显示旗帜")) },
-            onClick = { onPrefs { it.copy(proxyIconStyle = if (it.proxyIconStyle == "Flag") "None" else "Flag") }; onDismiss() },
-        )
-        DropdownMenuItem(
-            text = { Text(text("Selectable groups only", "仅显示可选择分组")) },
-            trailingIcon = { Checkbox(checked = prefs.proxyExcludeNotSelectable, onCheckedChange = null) },
-            onClick = { onPrefs { it.copy(proxyExcludeNotSelectable = !it.proxyExcludeNotSelectable) }; onDismiss() },
-        )
     }
 }
 
@@ -661,6 +676,8 @@ class MainActivity : ComponentActivity() {
                     "override" -> Text(text("Configuration overrides", "配置覆盖"))
                     "meta-feature" -> Text(text("Kernel features", "内核特性"))
                     "tailscale" -> Text("Tailscale")
+                    "quality" -> Text(text("IP Quality", "IP 质量"))
+                    "latency" -> Text(text("Network tools", "网络工具"))
                     else -> Text(route.substringBefore('/').replace('-', ' ').replaceFirstChar { it.uppercase() })
                 }
             }, navigationIcon = {
@@ -704,7 +721,7 @@ class MainActivity : ComponentActivity() {
                 composable("providers") { ProvidersScreen() }
                 composable("connections") { ConnectionsScreen(prefs, model::updateUi, connectionQuery, { connectionQuery = it }) }
                 composable("quality") { QualityScreen() }
-                composable("latency") { LatencyScreen(prefs, model::updateUi) }
+                composable("latency") { ToolsScreen(prefs, model::updateUi) }
                 composable("backup") { BackupScreen() }
                 composable("access") { snapshot?.let { AccessControlScreen(it, model::updateRuntime, model::updateUi, accessQuery, { accessQuery = it }) } }
                 composable("override") { OverrideScreen(false, { nav.popBackStack() }) }
@@ -715,7 +732,7 @@ class MainActivity : ComponentActivity() {
                 composable("help") { HelpScreen(onOpenUrl = { openLink(it) }) }
                 composable("about") {
                     val info = activity.packageManager.getPackageInfo(activity.packageName, 0)
-                    AboutScreen(info.versionName.orEmpty(), info.longVersionCode, Bridge.nativeCoreVersion()) { openLink(it) }
+                    AboutScreen(info.versionName.orEmpty(), info.versionCodeCompat, Bridge.nativeCoreVersion()) { openLink(it) }
                 }
             }
             }

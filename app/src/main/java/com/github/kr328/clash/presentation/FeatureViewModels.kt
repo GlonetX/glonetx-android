@@ -82,6 +82,9 @@ class FeatureViewModel(application: Application, val saved: SavedStateHandle) : 
         require(target.isNotBlank()) { "Unable to resolve exit IP" }
         quality.value=repository.quality(target)
     }
+    fun loadOutbound() = action {
+        ip.value=repository.ip(); directIp.value=repository.ip("DIRECT")
+    }
     fun probe(services: List<Pair<String,String>>) = action {
         probeRunning.value=true; probes.value=emptyMap()
         try { coroutineScope { val gate=kotlinx.coroutines.sync.Semaphore(3)

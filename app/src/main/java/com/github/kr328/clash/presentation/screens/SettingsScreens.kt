@@ -69,7 +69,7 @@ fun SettingsScreen(
                         SettingAction(text("Providers", "Providers"), icon=Icons.Default.Dns) { onNavigate("providers") }
                         SettingAction(text("Connections", "连接"), icon=Icons.Default.Lan) { onNavigate("connections") }
                         SettingAction(text("IP quality", "IP 质量"), icon=Icons.Default.VerifiedUser) { onNavigate("quality") }
-                        SettingAction(text("Latency and service probes", "延迟与服务检测"), icon=Icons.Default.Speed) { onNavigate("latency") }
+                        SettingAction(text("Network tools", "网络工具"), icon=Icons.Default.Speed) { onNavigate("latency") }
                     }
                 }
             }

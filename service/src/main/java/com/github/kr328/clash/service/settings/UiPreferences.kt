@@ -33,6 +33,7 @@ data class UiPreferences(
     val dashboardCardHidden: Set<String> = emptySet(),
     val probeServiceOrder: List<String> = emptyList(),
     val probeServiceEnabled: Set<String> = emptySet(),
+    val probeServiceCategory: String = "All",
     val accessControlSort: String = "Label",
     val accessControlReverse: Boolean = false,
     val accessControlSystemApp: Boolean = false,

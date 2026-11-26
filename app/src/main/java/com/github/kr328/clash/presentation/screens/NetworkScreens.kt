@@ -1,7 +1,9 @@
 package com.github.kr328.clash.presentation.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +30,6 @@ import com.github.kr328.clash.remote.Broadcasts
 import com.github.kr328.clash.remote.Remote
 import java.util.UUID
 import com.github.kr328.clash.service.settings.UiPreferences
-import com.github.kr328.clash.design.model.ProbeServices
 import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
@@ -246,45 +247,164 @@ import java.util.Date
 }
 @Composable private fun ConnectionRow(c:ConnectionItem,onClick:()->Unit){InfoCard(c.host.ifBlank{c.destination},"${c.network} · ${c.process.orEmpty().ifBlank{text("Unknown process","未知进程")}}\n${text("Upload","上传")} ${bytes(c.upload)} · ${text("Download","下载")} ${bytes(c.download)}",icon=Icons.Default.Lan,onClick=onClick)}
 
-@Composable private fun boolText(value:String?):String=when(value?.lowercase()){"true"->text("Yes","是");"false"->text("No","否");else->value?:"—"}
-
-@Composable private fun ipDetails(ip:ExternalIP?):String {
-    if(ip==null)return "—"
-    return listOfNotNull(
-        ip.ip?.let{"${text("IP","IP")}: ${simplifyIpAddress(it)}"},
-        listOfNotNull(ip.country,ip.city).joinToString(", ").takeIf{it.isNotBlank()}?.let{"${text("Location","位置")}: $it"},
-        ip.isp?.let{"${text("ISP","运营商")}: $it"},
-        ip.asn?.let{"${text("ASN","ASN")}: $it"},
-    ).joinToString("\n")
-}
-
 @Composable fun QualityScreen(model:FeatureViewModel=viewModel()) {
-    val quality by model.quality.collectAsStateWithLifecycle();val exit by model.ip.collectAsStateWithLifecycle();val direct by model.directIp.collectAsStateWithLifecycle();val busy by model.busy.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var address by rememberSaveable{mutableStateOf("")}
-    LaunchedEffect(Unit){model.loadQuality()}
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{OutlinedTextField(address,{address=it},Modifier.fillMaxWidth(),label={Text(text("IP address (blank uses exit IP)","IP 地址（留空使用出口 IP）"))})};item{Button(enabled=!busy,onClick={model.loadQuality(address)}){Text(text("Check quality","检测质量"))}}
-        if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth())};if(error!=null)item{ErrorState(error!!){model.loadQuality(address)}}
-        item{InfoCard(text("Proxy exit","代理出口"),ipDetails(exit),icon=Icons.Default.Public)};item{InfoCard(text("Direct network","直连网络"),ipDetails(direct),icon=Icons.Default.Dns)}
-        quality?.let{q->
-            item{InfoCard("Scamalytics","${text("Fraud score","欺诈分数")}: ${q.scamalyticsScore?:"—"}\n${text("Risk","风险")}: ${q.scamalyticsRisk?:"—"}",icon=Icons.Default.Security)}
-            item{InfoCard("ProxyCheck","${text("Risk","风险")}: ${q.proxyCheckRisk?:"—"}\n${text("Proxy","代理")}: ${q.proxyCheckProxy?:"—"}\n${text("Type","类型")}: ${q.proxyCheckType?:"—"}",icon=Icons.Default.Shield)}
-            item{InfoCard("IP-API","${text("ISP","运营商")}: ${q.ipApiISP?:"—"}\n${text("Proxy","代理")}: ${boolText(q.ipApiProxy)}\n${text("Hosting","托管")}: ${boolText(q.ipApiHosting)}\n${text("Mobile","移动网络")}: ${boolText(q.ipApiMobile)}",icon=Icons.Default.Public)}
+    val quality by model.quality.collectAsStateWithLifecycle()
+    val exit by model.ip.collectAsStateWithLifecycle()
+    val direct by model.directIp.collectAsStateWithLifecycle()
+    val busy by model.busy.collectAsStateWithLifecycle()
+    val error by model.error.collectAsStateWithLifecycle()
+    var address by rememberSaveable { mutableStateOf("") }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val q = quality
+    val tabs = listOf(
+        text("Overview", "概览"),
+        text("Risk", "风险"),
+        text("Network", "网络"),
+        text("Sources", "来源"),
+    )
+    LaunchedEffect(Unit) { model.loadQuality() }
+    Column(Modifier.fillMaxSize()) {
+        SecondaryTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+        ) {
+            tabs.forEachIndexed { index, label ->
+                Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = { Text(label) })
+            }
         }
-    }
-}
-
-@Composable fun LatencyScreen(prefs:UiPreferences,onPrefs:((UiPreferences)->UiPreferences)->Unit,model:FeatureViewModel=viewModel()){
-    val probes by model.probes.collectAsStateWithLifecycle();val busy by model.probeRunning.collectAsStateWithLifecycle();val error by model.error.collectAsStateWithLifecycle();var url by rememberSaveable{mutableStateOf("https://www.gstatic.com/generate_204")};var result by rememberSaveable{mutableStateOf<String?>(null)}
-    val order=(prefs.probeServiceOrder+ProbeServices.names).distinct();val enabled=if(prefs.probeServiceOrder.isEmpty())order.toSet()else prefs.probeServiceEnabled
-    LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{OutlinedTextField(url,{url=it},Modifier.fillMaxWidth(),label={Text(text("Test URL","测试地址"))},leadingIcon={Icon(Icons.Default.Link,null)})};item{Row(verticalAlignment=Alignment.CenterVertically){Button(enabled=!busy,onClick={model.action{result=model.repository.latency(url).toString()}}){Text(text("Test","测试"))};Spacer(Modifier.width(16.dp));result?.let{value->val latency=value.toLongOrNull();MetricDetail(Icons.Default.Timer,text("Latency","延迟"),if(latency!=null&&latency>=0)"$latency ms"else text("Failed","失败"),tint=if(latency!=null&&latency>=0)proxyLatencyColor(latency.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())else MaterialTheme.colorScheme.error)}}}
-        item{SectionTitle(text("Service probes","服务检测"))};item{Button(enabled=!busy,onClick={model.probe(ProbeServices.ALL.filter{it.name in enabled}.map{it.name to it.url})}){Text(if(busy)text("Checking…","检测中…")else text("Check selected services","检测已选服务"))}}
-        if(error!=null)item{ErrorState(error!!){model.error.value=null}}
-        itemsIndexed(order,key={_,s->s}){index,name->
-            val r=probes[name]
-            val statusIcon=when{name !in probes->Icons.Default.HourglassEmpty;r==null->Icons.Default.ErrorOutline;r.code in 200..299->Icons.Default.CheckCircle;else->Icons.Default.Warning}
-            val subtitle=when{name !in probes->text("Not tested","未测试");r==null->text("Unavailable","不可用");r.code !in 200..299||r.latency<0->text("Failed","失败");else->"HTTP ${r.code} · ${text("Latency","延迟")} ${r.latency} ms"}
-            InfoCard(name,subtitle,icon=statusIcon,trailing={Row(verticalAlignment=Alignment.CenterVertically){if(index>0)IconButton(onClick={val next=order.toMutableList().apply{add(index-1,removeAt(index))};onPrefs{it.copy(probeServiceOrder=next,probeServiceEnabled=enabled)}}){Icon(Icons.Default.ArrowUpward,text("Move up","上移"))};Checkbox(name in enabled,{checked->onPrefs{it.copy(probeServiceOrder=order,probeServiceEnabled=if(checked)enabled+name else enabled-name)}})}})
+        LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                OutlinedTextField(
+                    address,
+                    { address = it },
+                    Modifier.fillMaxWidth(),
+                    label = { Text(text("IP address (blank uses exit IP)", "IP 地址（留空使用出口 IP）")) },
+                )
+            }
+            item { Button(enabled = !busy, onClick = { model.loadQuality(address) }) { Text(text("Check quality", "检测质量")) } }
+            if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+            if (error != null) item { ErrorState(error!!) { model.loadQuality(address) } }
+            when (selectedTab) {
+                0 -> {
+                    item { QualityIpCard(text("Proxy exit", "代理出口"), exit, Icons.Default.Public) }
+                    item { QualityIpCard(text("Direct network", "直连网络"), direct, Icons.Default.Dns) }
+                    if (q != null) {
+                        calculateIpQualityScore(q)?.let { score ->
+                            item { QualityScoreCard(score) }
+                        }
+                        val countries = q.sources.mapNotNull { it.country }.filter { it.isNotBlank() }.distinct()
+                        if (countries.isNotEmpty()) {
+                            item {
+                                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(text("Country consensus", "国家共识"), style = MaterialTheme.typography.titleMedium)
+                                        QualityDetailRow(text("Countries", "国家"), countries.joinToString(" · "))
+                                    }
+                                }
+                            }
+                        }
+                        item { SectionTitle(text("Risk overview", "风险概览")) }
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                RiskGaugeCard(
+                                    title = "Scamalytics",
+                                    value = q.scamalyticsScore ?: "—",
+                                    caption = q.scamalyticsRisk,
+                                    progress = riskPercent(q.scamalyticsScore, 100f),
+                                    icon = Icons.Default.Security,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                RiskGaugeCard(
+                                    title = "ProxyCheck",
+                                    value = formatRiskPercent(q.proxyCheckRisk, 100f),
+                                    caption = listOfNotNull(q.proxyCheckProxy, q.proxyCheckType).joinToString(" · ").takeIf { it.isNotBlank() },
+                                    progress = riskPercent(q.proxyCheckRisk, 100f),
+                                    icon = Icons.Default.Shield,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    } else if (!busy) {
+                        item { EmptyState(text("No quality data yet", "暂无质量检测数据")) }
+                    }
+                }
+                1 -> {
+                    if (q != null) {
+                        item {
+                            RiskGaugeCard(
+                                title = "Scamalytics",
+                                value = q.scamalyticsScore ?: "—",
+                                caption = q.scamalyticsRisk,
+                                progress = riskPercent(q.scamalyticsScore, 100f),
+                                icon = Icons.Default.Security,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        item {
+                            RiskGaugeCard(
+                                title = "ProxyCheck",
+                                value = formatRiskPercent(q.proxyCheckRisk, 100f),
+                                caption = listOfNotNull(q.proxyCheckProxy, q.proxyCheckType).joinToString(" · ").takeIf { it.isNotBlank() },
+                                progress = riskPercent(q.proxyCheckRisk, 100f),
+                                icon = Icons.Default.Shield,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        item {
+                            Surface(
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(text("ProxyCheck details", "ProxyCheck 详情"), style = MaterialTheme.typography.titleMedium)
+                                    QualityDetailRow(text("Risk", "风险"), q.proxyCheckRisk ?: "—")
+                                    QualityDetailRow(text("Proxy", "代理"), q.proxyCheckProxy ?: "—")
+                                    QualityDetailRow(text("Type", "类型"), q.proxyCheckType ?: "—")
+                                }
+                            }
+                        }
+                    } else if (!busy) {
+                        item { EmptyState(text("No quality data yet", "暂无质量检测数据")) }
+                    }
+                }
+                2 -> {
+                    if (q != null) {
+                        item { SectionTitle(text("IP-API", "IP-API")) }
+                        item {
+                            Surface(
+                                shape = MaterialTheme.shapes.large,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    QualityDetailRow(text("ISP", "运营商"), q.ipApiISP ?: "—")
+                                    QualityDetailRow(text("ASN", "ASN"), q.asn ?: "—")
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        QualityStatusPill(text("Proxy", "代理"), q.ipApiProxy, alertWhenTrue = true)
+                                        QualityStatusPill(text("Hosting", "托管"), q.ipApiHosting, alertWhenTrue = true)
+                                        QualityStatusPill(text("Mobile", "移动网络"), q.ipApiMobile, alertWhenTrue = false)
+                                    }
+                                }
+                            }
+                        }
+                        item { InfoCard(text("Checked IP", "检测 IP"), compactIpAddress(q.ip), icon = Icons.Default.Public) }
+                    } else if (!busy) {
+                        item { EmptyState(text("No quality data yet", "暂无质量检测数据")) }
+                    }
+                }
+                else -> {
+                    if (q != null && q.sources.isNotEmpty()) {
+                        item { SectionTitle(text("Data sources", "数据来源")) }
+                        items(q.sources, key = { it.name }) { source ->
+                            QualitySourceCard(source)
+                        }
+                    } else if (!busy) {
+                        item { EmptyState(text("No source data yet", "暂无数据源结果")) }
+                    }
+                }
+            }
         }
     }
 }

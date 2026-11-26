@@ -12,5 +12,16 @@ class IpFormatTest {
 
     @Test fun keepsIpv4Unchanged() {
         assertEquals("143.246.51.44", simplifyIpAddress("143.246.51.44"))
+        assertEquals("143.246.51.44", compactIpAddress("143.246.51.44"))
+    }
+
+    @Test fun abbreviatesLongIpv6AddressesWithBrackets() {
+        assertEquals("[2602:fbf1:…:1000:9b]", compactIpAddress("2602:fbf1:b003::1000:9b"))
+        assertEquals("[2001:db8:…:5:6]", compactIpAddress("2001:db8:1:2:3:4:5:6"))
+    }
+
+    @Test fun keepsShortIpv6AddressesReadable() {
+        assertEquals("::1", compactIpAddress("::1"))
+        assertEquals("2001:db8::1", compactIpAddress("2001:db8::1"))
     }
 }

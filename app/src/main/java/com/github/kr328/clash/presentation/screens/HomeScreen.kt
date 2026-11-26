@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.github.kr328.clash.core.model.TunnelState
@@ -219,7 +220,7 @@ private fun formatUptime(seconds:Long):String {
                         }
                     }
                     "ip_info" -> {
-                        Text(state.ip?.ip?.let(::simplifyIpAddress) ?: if (state.connected) text("Detecting…", "检测中…") else "—", style = MaterialTheme.typography.titleLarge)
+                        Text(state.ip?.ip?.let(::compactIpAddress) ?: if (state.connected) text("Detecting…", "检测中…") else "—", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         state.ip?.let {
                             Text(
                                 listOfNotNull(it.country, it.city).joinToString(" · "),

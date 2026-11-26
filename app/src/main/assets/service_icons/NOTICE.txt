@@ -1,0 +1,10 @@
+Service brand icons bundled from Iconify.
+
+- Simple Icons: CC0 1.0 — https://github.com/simple-icons/simple-icons
+- Remix Design (ri): Apache-2.0 — https://github.com/cyberalien/RemixIcon
+- theSVG (thesvg): MIT — https://github.com/glincker/thesvg
+- Arcticons: CC-BY-SA-4.0 — https://github.com/Arcticons-Team/Arcticons
+- Font Awesome Brands (fa7-brands): CC-BY-4.0 — https://github.com/FortAwesome/Font-Awesome
+- Custom Brand Icons (cbi): CC-BY-NC-SA-4.0 — https://github.com/elax46/custom-brand-icons
+
+Brand marks remain trademarks of their respective owners.
