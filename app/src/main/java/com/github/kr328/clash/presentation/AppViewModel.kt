@@ -98,7 +98,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application), Br
                 history = ((if (resetHistory) emptyList() else it.history.filter { point -> now - point.sampledAt < if (interval == 5_000L) 300_000L else 900_000L }) + TrafficPoint(traffic.trafficUploadValue(), traffic.trafficDownloadValue(), now)).takeLast(if (interval == 5_000L) 60 else 900), error = null) }
         } catch(e: CancellationException) { throw e } catch(e: Exception) { _home.update { it.copy(error = e.message) } }
     }
-    fun setMode(mode: TunnelState.Mode) = launchAction { android.util.Log.d("GlonetXMode", "setMode $mode"); repository.mode(mode); refresh() }
+    fun setMode(mode: TunnelState.Mode) = launchAction { repository.mode(mode); refresh() }
     fun refreshIp() = launchAction { val ip = repository.ip(); _home.update { it.copy(ip = ip) } }
     fun launchAction(block: suspend () -> Unit) = viewModelScope.launch {
         try { block() } catch(e: CancellationException) { throw e } catch(e: Exception) { message(e.message ?: "Operation failed") }

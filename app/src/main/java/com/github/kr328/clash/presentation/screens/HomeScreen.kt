@@ -122,7 +122,6 @@ private fun formatUptime(seconds:Long):String {
                                         else -> TunnelState.Mode.Rule
                                     }
                                     onMode(next)
-                                    android.util.Log.d("GlonetXMode", "mode click $next")
                                 },
                                 enabled = !state.loading,
                                 modifier = Modifier.size(40.dp),
