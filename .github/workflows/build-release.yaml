@@ -136,7 +136,8 @@ jobs:
 
           for apk in "${apks[@]}"; do
             cert_output="$("$apksigner" verify --print-certs "$apk")"
-            mapfile -t cert_digests < <(sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p' <<< "$cert_output")
+            echo "$cert_output"
+            mapfile -t cert_digests < <(grep -i 'certificate SHA-256 digest' <<< "$cert_output" | grep -oE '[0-9A-Fa-f]{64}' || true)
             if (( ${#cert_digests[@]} != 1 )); then
               echo "::error::Expected exactly one signer certificate in $apk"
               exit 1
