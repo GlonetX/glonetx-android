@@ -78,13 +78,21 @@ import java.util.Date
         onDispose { Remote.broadcasts.removeObserver(observer) }
     }
     LaunchedEffect(prefs.proxyExcludeNotSelectable, revision) {
-        model.group.value = null
+        kotlinx.coroutines.delay(80)
         model.loadGroups(prefs.proxyExcludeNotSelectable).join()
         val next = selected.takeIf { it in model.groups.value } ?: model.groups.value.firstOrNull().orEmpty()
-        selected = next
-        if (next.isNotBlank()) model.loadGroup(next, sort)
+        if (next != selected) selected = next
     }
-    LaunchedEffect(selected,sort){if(selected.isNotBlank()){model.loadGroup(selected,sort);onPrefs{it.copy(proxyLastGroup=selected)}} else model.group.value=null}
+    LaunchedEffect(selected, sort) {
+        if (selected.isNotBlank()) {
+            model.loadGroup(selected, sort)
+        } else {
+            model.group.value = null
+        }
+    }
+    LaunchedEffect(selected) {
+        if (selected.isNotBlank()) onPrefs { it.copy(proxyLastGroup = selected) }
+    }
     Column(Modifier.fillMaxSize()) {
         if(groups.isNotEmpty()) {
             val selectedIndex=groups.indexOf(selected).coerceAtLeast(0)
@@ -104,12 +112,6 @@ import java.util.Date
             Icon(Icons.Default.AccountTree,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(6.dp))
             Text(localizedGroupName(group?.type.orEmpty()),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge)
-            IconButton(onClick={onPrefs{it.copy(proxyViewMode=if(prefs.proxyViewMode=="List")"Grid" else "List")}}) {
-                Icon(
-                    if (prefs.proxyViewMode == "List") Icons.Default.GridView else Icons.Default.ViewList,
-                    text(if (prefs.proxyViewMode == "List") "Card view" else "List view", if (prefs.proxyViewMode == "List") "卡片视图" else "列表视图"),
-                )
-            }
             TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}
         }
         val nodes=group?.proxies.orEmpty().filter{it.name.contains(query,true)||it.title.contains(query,true)}

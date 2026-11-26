@@ -175,29 +175,73 @@ class MainActivity : ComponentActivity() {
     onPrefs: ((UiPreferences) -> UiPreferences) -> Unit,
 ) {
     DropdownMenu(expanded, onDismiss) {
+        Text(
+            text("View", "视图"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        DropdownMenuItem(
+            text = { Text(text("Cards", "卡片")) },
+            trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "Grid", onClick = null) },
+            onClick = { onPrefs { it.copy(proxyViewMode = "Grid") }; onDismiss() },
+        )
+        DropdownMenuItem(
+            text = { Text(text("List", "列表")) },
+            trailingIcon = { RadioButton(selected = prefs.proxyViewMode == "List", onClick = null) },
+            onClick = { onPrefs { it.copy(proxyViewMode = "List") }; onDismiss() },
+        )
+        HorizontalDivider()
+        Text(
+            text("Columns", "列数"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        (1..4).forEach { columns ->
+            DropdownMenuItem(
+                text = { Text("$columns") },
+                trailingIcon = { RadioButton(selected = prefs.proxyLine == columns, onClick = null) },
+                onClick = { onPrefs { it.copy(proxyLine = columns) }; onDismiss() },
+            )
+        }
+        HorizontalDivider()
+        Text(
+            text("Sort", "排序"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
         ProxySort.values().forEach { sort ->
             DropdownMenuItem(
                 text = { Text(sort.name) },
+                trailingIcon = { RadioButton(selected = prefs.proxySort == sort.name, onClick = null) },
                 onClick = { onPrefs { it.copy(proxySort = sort.name) }; onDismiss() },
             )
         }
+        HorizontalDivider()
+        Text(
+            text("Card density", "卡片密度"),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
         listOf("Tight", "Standard", "Loose").forEach { density ->
             DropdownMenuItem(
-                text = { Text(text("Card density: ", "卡片密度：") + density) },
+                text = { Text(density) },
+                trailingIcon = { RadioButton(selected = prefs.proxyDensity == density, onClick = null) },
                 onClick = { onPrefs { it.copy(proxyDensity = density) }; onDismiss() },
             )
         }
+        HorizontalDivider()
         DropdownMenuItem(
             text = { Text(text(if (prefs.proxyIconStyle == "Flag") "Hide flags" else "Show flags", if (prefs.proxyIconStyle == "Flag") "隐藏旗帜" else "显示旗帜")) },
             onClick = { onPrefs { it.copy(proxyIconStyle = if (it.proxyIconStyle == "Flag") "None" else "Flag") }; onDismiss() },
         )
         DropdownMenuItem(
-            text = { Text(text("Toggle selectable groups only", "切换仅显示可选择分组")) },
+            text = { Text(text("Selectable groups only", "仅显示可选择分组")) },
+            trailingIcon = { Checkbox(checked = prefs.proxyExcludeNotSelectable, onCheckedChange = null) },
             onClick = { onPrefs { it.copy(proxyExcludeNotSelectable = !it.proxyExcludeNotSelectable) }; onDismiss() },
-        )
-        DropdownMenuItem(
-            text = { Text(text("Columns: ", "列数：") + prefs.proxyLine) },
-            onClick = { onPrefs { it.copy(proxyLine = it.proxyLine % 4 + 1) }; onDismiss() },
         )
     }
 }
