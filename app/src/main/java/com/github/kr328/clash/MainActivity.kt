@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -521,26 +522,73 @@ class MainActivity : ComponentActivity() {
                         Spacer(Modifier.width(12.dp))
                         TopBarSearchField(connectionQuery, { connectionQuery = it }, text("Host, process, rule…", "主机、进程、规则…"), Modifier.weight(1f))
                     }
-                    "home" -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    "home" -> Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("GlonetX", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.weight(1f))
                         if (homeHeaderVisible) {
                             Row(
+                                modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.End,
                             ) {
-                                Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Text("${bytes(home.download)}/s", style = MaterialTheme.typography.labelSmall)
-                                Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
-                                Text("${bytes(home.upload)}/s", style = MaterialTheme.typography.labelSmall)
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Text(
+                                        "${bytes(home.download)}/s",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                                    Text(
+                                        "${bytes(home.upload)}/s",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         } else {
                             Row(
+                                modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                horizontalArrangement = Arrangement.End,
                             ) {
-                                Icon(Icons.Default.Download, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Icon(Icons.Default.Upload, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Icon(Icons.Default.Download, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Text(
+                                        "${bytes(home.download)}/s",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Icon(Icons.Default.Upload, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.tertiary)
+                                    Text(
+                                        "${bytes(home.upload)}/s",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                             val nextMode = when (home.mode) {
                                 TunnelState.Mode.Rule -> TunnelState.Mode.Global
@@ -558,7 +606,10 @@ class MainActivity : ComponentActivity() {
                                 }, style = MaterialTheme.typography.labelMedium)
                             }
                             IconButton(onClick = { toggle() }) {
-                                Icon(Icons.Default.PowerSettingsNew, if (home.connected) text("Disconnect", "断开") else text("Connect", "连接"))
+                                Icon(
+                                    if (home.connected) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    if (home.connected) text("Pause", "暂停") else text("Start", "开始"),
+                                )
                             }
                         }
                     }
@@ -593,7 +644,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 composable("home") {
                     val home by model.home.collectAsStateWithLifecycle()
-                    HomeScreen(home, prefs, snapshot, ::toggle, ::navigate, model::refreshIp, model::updateUi, onHeaderVisible = { homeHeaderVisible = it })
+                    HomeScreen(home, prefs, snapshot, ::toggle, model::setMode, ::navigate, model::refreshIp, model::updateUi, onHeaderVisible = { homeHeaderVisible = it })
                 }
                 composable("proxy") { ProxyScreen(prefs, proxyQuery, model::updateUi) }
                 listOf("settings", "app-settings", "network-settings").forEach { page -> composable(page) {

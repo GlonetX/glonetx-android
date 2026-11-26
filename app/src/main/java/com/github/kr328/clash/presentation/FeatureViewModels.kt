@@ -43,8 +43,8 @@ class FeatureViewModel(application: Application, val saved: SavedStateHandle) : 
     fun loadGroups(exclude: Boolean) = action { groups.value=repository.groups(exclude) }
     fun loadGroup(name: String, sort: ProxySort) = action { group.value=repository.group(name, sort) }
     fun loadConnections() = action { connections.value=repository.connections() }
-    fun loadProfile(id: String) = action {
-        if(loadedProfile?.uuid?.toString()==id) return@action
+    fun loadProfile(id: String, force: Boolean = false) = action {
+        if(!force && loadedProfile?.uuid?.toString()==id) return@action
         val original=repository.profile(id) ?: error("Profile no longer exists")
         val interval=saved.get<Long>("profile.interval") ?: original.interval
         loadedProfile=original

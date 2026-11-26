@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +42,20 @@ import java.util.Date
         delay <= 500 -> if (dark) Color(0xFFFFD54F) else Color(0xFFF9A825)
         else -> colors.error
     }
+}
+
+@Composable private fun localizedGroupName(name: String): String = when (name.lowercase()) {
+    "selector" -> text("Selector", "选择器")
+    "urltest", "url-test", "url test" -> text("URL test", "自动测速")
+    "fallback" -> text("Fallback", "故障转移")
+    "loadbalance", "load-balance", "load balance" -> text("Load balance", "负载均衡")
+    "relay" -> text("Relay", "中继")
+    "global" -> text("Global", "全局")
+    "direct" -> text("Direct", "直连")
+    "reject" -> text("Reject", "拒绝")
+    "pass" -> text("Pass", "直连")
+    "compatible" -> text("Compatible", "兼容")
+    else -> name
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,23 +90,116 @@ import java.util.Date
             val selectedIndex=groups.indexOf(selected).coerceAtLeast(0)
             if(groups.size<=4) {
                 SecondaryTabRow(selectedTabIndex=selectedIndex,containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary) {
-                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(g)})}
+                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(localizedGroupName(g))})}
                 }
             } else {
                 SecondaryScrollableTabRow(selectedTabIndex=selectedIndex,containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.primary,edgePadding=16.dp) {
-                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(g)})}
+                    groups.forEach{g->Tab(selected=g==selected,onClick={selected=g},text={Text(localizedGroupName(g))})}
                 }
             }
         }
         if(error!=null)ErrorState(error!!){model.loadGroups(prefs.proxyExcludeNotSelectable);if(selected.isNotBlank())model.loadGroup(selected,sort)}
         if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.AccountTree,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.width(6.dp));Text(group?.type.orEmpty(),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge);TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}}
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Default.AccountTree,null,Modifier.size(16.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(6.dp))
+            Text(localizedGroupName(group?.type.orEmpty()),Modifier.weight(1f),style=MaterialTheme.typography.labelLarge)
+            IconButton(onClick={onPrefs{it.copy(proxyViewMode=if(prefs.proxyViewMode=="List")"Grid" else "List")}}) {
+                Icon(
+                    if (prefs.proxyViewMode == "List") Icons.Default.GridView else Icons.Default.ViewList,
+                    text(if (prefs.proxyViewMode == "List") "Card view" else "List view", if (prefs.proxyViewMode == "List") "卡片视图" else "列表视图"),
+                )
+            }
+            TextButton(enabled=selected.isNotBlank()&&!busy,onClick={model.action{model.repository.healthCheck(selected);model.group.value=model.repository.group(selected,sort)}}){Icon(Icons.Default.Speed,null);Text(text("Test latency","测速"))}
+        }
         val nodes=group?.proxies.orEmpty().filter{it.name.contains(query,true)||it.title.contains(query,true)}
         if(nodes.isEmpty()&&!busy)EmptyState(text("No nodes. Select a subscription and connect.","没有节点，请选择订阅并连接。"))
-        LazyVerticalGrid(columns=GridCells.Fixed(prefs.proxyLine.coerceIn(1,4)),contentPadding=PaddingValues(16.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            items(nodes,key={it.name}){node-> val active=node.name==group?.now
-                Surface(modifier=Modifier.fillMaxWidth().clickable{if(node.isGroup&&node.name in groups)selected=node.name else model.action{check(model.repository.select(selected,node.name)){"This group does not allow manual selection"};model.group.value=model.repository.group(selected,sort)}},shape=MaterialTheme.shapes.large,color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null){Column(Modifier.padding(when(prefs.proxyDensity){"Tight", "Compact" -> 12.dp; "Loose" -> 24.dp; else -> 18.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)){Row{if(prefs.proxyIconStyle=="Flag") { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) };Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis);if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))};if(prefs.proxyDensity !in listOf("Compact", "Tight"))Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=2,overflow=TextOverflow.Ellipsis);MetricDetail(Icons.Default.NetworkCheck,text("Latency","延迟"),if(node.delay<=0)text("Not tested","未测试")else"${node.delay} ms",tint=proxyLatencyColor(node.delay))}}
+        if (prefs.proxyViewMode == "List") {
+            LazyColumn(contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(nodes,key={_,node->node.name}){index,node->
+                    ProxyListRow(
+                        node=node,
+                        active=node.name==group?.now,
+                        showFlag=prefs.proxyIconStyle=="Flag",
+                        onClick={
+                            if(node.isGroup&&node.name in groups)selected=node.name
+                            else model.action{
+                                check(model.repository.select(selected,node.name)){"This group does not allow manual selection"}
+                                model.group.value=model.repository.group(selected,sort)
+                            }
+                        },
+                    )
+                    if (index < nodes.lastIndex) HorizontalDivider(color=MaterialTheme.colorScheme.outlineVariant.copy(alpha=0.35f))
+                }
             }
+        } else {
+            LazyVerticalGrid(columns=GridCells.Fixed(prefs.proxyLine.coerceIn(1,4)),contentPadding=PaddingValues(16.dp),horizontalArrangement=Arrangement.spacedBy(10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                items(nodes,key={it.name}){node->
+                    ProxyGridCard(
+                        node=node,
+                        active=node.name==group?.now,
+                        density=prefs.proxyDensity,
+                        showFlag=prefs.proxyIconStyle=="Flag",
+                        onClick={
+                            if(node.isGroup&&node.name in groups)selected=node.name
+                            else model.action{
+                                check(model.repository.select(selected,node.name)){"This group does not allow manual selection"}
+                                model.group.value=model.repository.group(selected,sort)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun ProxyGridCard(node:Proxy,active:Boolean,density:String,showFlag:Boolean,onClick:()->Unit) {
+    Surface(
+        modifier=Modifier.fillMaxWidth().height(150.dp).clickable(onClick=onClick),
+        shape=MaterialTheme.shapes.large,
+        color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null,
+    ) {
+        Column(Modifier.padding(when(density){"Tight", "Compact" -> 12.dp; "Loose" -> 20.dp; else -> 16.dp}),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                if(showFlag) { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag,Modifier.padding(end=6.dp)) }
+                Text(node.title.ifBlank{node.name},Modifier.weight(1f),style=MaterialTheme.typography.titleSmall,maxLines=2,overflow=TextOverflow.Ellipsis)
+                if(active)Icon(Icons.Default.Check,null,Modifier.size(16.dp))
+            }
+            if(density !in listOf("Compact", "Tight")) {
+                Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,maxLines=1,overflow=TextOverflow.Ellipsis)
+            }
+            MetricDetail(Icons.Default.NetworkCheck,text("Latency","延迟"),if(node.delay<=0)text("Not tested","未测试")else"${node.delay} ms",tint=proxyLatencyColor(node.delay))
+        }
+    }
+}
+
+@Composable private fun ProxyListRow(node:Proxy,active:Boolean,showFlag:Boolean,onClick:()->Unit) {
+    Surface(
+        modifier=Modifier.fillMaxWidth().clickable(onClick=onClick),
+        shape=RoundedCornerShape(14.dp),
+        color=if(active)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border=if(active)androidx.compose.foundation.BorderStroke(1.dp,MaterialTheme.colorScheme.primary)else null,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=12.dp),
+            verticalAlignment=Alignment.CenterVertically,
+            horizontalArrangement=Arrangement.spacedBy(12.dp),
+        ) {
+            if(showFlag) { val flag=leadingNodeFlag(node.name); if(flag.isNotEmpty()) Text(flag) }
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                Text(
+                    node.title.ifBlank{node.name},
+                    style=MaterialTheme.typography.titleSmall,
+                    fontWeight=if(active)FontWeight.Bold else FontWeight.Normal,
+                    maxLines=1,
+                    overflow=TextOverflow.Ellipsis,
+                )
+                Text(node.subtitle.ifBlank{node.type},style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
+            }
+            Text(if(node.delay<=0)text("Not tested","未测试")else"${node.delay} ms",style=MaterialTheme.typography.labelMedium,color=proxyLatencyColor(node.delay),maxLines=1)
+            if(active)Icon(Icons.Default.Check,null,Modifier.size(18.dp),tint=MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -140,7 +249,7 @@ import java.util.Date
 @Composable private fun ipDetails(ip:ExternalIP?):String {
     if(ip==null)return "—"
     return listOfNotNull(
-        ip.ip?.let{"${text("IP","IP")}: $it"},
+        ip.ip?.let{"${text("IP","IP")}: ${simplifyIpAddress(it)}"},
         listOfNotNull(ip.country,ip.city).joinToString(", ").takeIf{it.isNotBlank()}?.let{"${text("Location","位置")}: $it"},
         ip.isp?.let{"${text("ISP","运营商")}: $it"},
         ip.asn?.let{"${text("ASN","ASN")}: $it"},

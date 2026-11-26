@@ -3,6 +3,7 @@ package com.github.kr328.clash.presentation.screens
 import androidx.activity.compose.BackHandler
 import android.content.Intent
 import android.graphics.Bitmap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -21,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,7 @@ import java.util.Date
     var deleting by remember { mutableStateOf<Profile?>(null) }
     var sharing by remember { mutableStateOf<Profile?>(null) }
     var annotating by remember { mutableStateOf<Profile?>(null) }
+    var updatingId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     LaunchedEffect(Unit) { model.loadProfiles() }
@@ -64,9 +67,18 @@ import java.util.Date
             if(busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if(profiles.isEmpty()&&!busy) item { EmptyState(text("Add a subscription to get started","添加订阅后开始连接")){Button(onClick=onCreate){Text(text("Add subscription","添加订阅"))}} }
         items(profiles.filter { p -> val annotation=preferences.subscriptionMetadata[p.uuid.toString()]; p.name.contains(query,true) || annotation?.tag?.contains(query,true)==true || annotation?.note?.contains(query,true)==true },key={it.uuid.toString()}) { p ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
+            val updating = updatingId == p.uuid.toString()
+            val cardAlpha by animateFloatAsState(if (updating) 0.55f else 1f, label = "profileCardAlpha")
+            ElevatedCard(Modifier.fillMaxWidth().graphicsLayer { alpha = cardAlpha }) {
                 var menu by remember(p.uuid) { mutableStateOf(false) }
                 Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                    if (updating) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Text(text("Updating…", "更新中…"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         RadioButton(p.active,modifier=Modifier.size(24.dp),enabled=p.imported&&!busy,onClick={model.action{model.repository.activate(p);model.loadProfiles()}})
                         Spacer(Modifier.width(8.dp))
@@ -81,7 +93,7 @@ import java.util.Date
                             IconButton(onClick={menu=true}) { Icon(Icons.Default.MoreVert, text("More", "更多")) }
                             DropdownMenu(menu,{menu=false}) {
                                 DropdownMenuItem(text={Text(text("Edit","编辑"))},leadingIcon={Icon(Icons.Default.Edit,null)},onClick={menu=false;onEdit(p.uuid.toString())})
-                                DropdownMenuItem(text={Text(text("Update","更新"))},leadingIcon={Icon(Icons.Default.Refresh,null)},enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={menu=false;model.action{model.repository.update(p);model.loadProfiles()}})
+                                DropdownMenuItem(text={Text(text("Update","更新"))},leadingIcon={Icon(Icons.Default.Refresh,null)},enabled=!busy&&p.imported&&p.type!=Profile.Type.File,onClick={menu=false;updatingId=p.uuid.toString();model.action{try{model.repository.update(p)}finally{updatingId=null};model.loadProfiles()}})
                                 DropdownMenuItem(text={Text(text("Tag and note","标签和备注"))},leadingIcon={Icon(Icons.Default.Label,null)},onClick={menu=false;annotating=p})
                                 DropdownMenuItem(text={Text(text("Duplicate","复制"))},leadingIcon={Icon(Icons.Default.ContentCopy,null)},enabled=!busy&&p.imported,onClick={menu=false;model.action{onEdit(model.repository.clone(p))}})
                                 DropdownMenuItem(text={Text(text("Share QR code","分享二维码"))},leadingIcon={Icon(Icons.Default.QrCode,null)},enabled=p.type==Profile.Type.Url&&p.source.isNotBlank(),onClick={menu=false;sharing=p})
@@ -97,8 +109,7 @@ import java.util.Date
                         LinearProgressIndicator(progress={((used.toFloat()/p.total).coerceIn(0f,1f))},modifier=Modifier.fillMaxWidth().height(3.dp))
                     }
                     if(p.expire>0) {
-                        val remainingDays=((p.expire-System.currentTimeMillis()+86_400_000L-1)/86_400_000L).toInt()
-                        MetricDetail(Icons.Default.Event,text("Remaining","剩余"),if(remainingDays>0)"$remainingDays ${text("days","天")}"else text("Expired","已到期"))
+                        MetricDetail(Icons.Default.Event,text("Remaining","剩余"),formatRemainingTime(p.expire))
                     }
                     if(p.updatedAt>0) MetricDetail(Icons.Default.Update,text("Updated","更新"),relativeUpdateTime(p.updatedAt))
                 }
@@ -196,6 +207,20 @@ import java.util.Date
         item{InfoCard(text("Configuration and provider files","配置和 Provider 文件"),onClick={filesVisited=true;onFiles(id)},trailing={Icon(Icons.Default.FolderOpen,null)})}
         if(error!=null)item{ErrorState(error!!){model.error.value=null}}
         if(busy)item{LinearProgressIndicator(Modifier.fillMaxWidth());progress?.let{Text(it,style=MaterialTheme.typography.bodySmall)}}
+        if (p.type != Profile.Type.File) {
+            item {
+                OutlinedButton(
+                    onClick = { model.action { model.repository.update(p); model.loadProfile(id, force = true) } },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (busy) text("Updating…", "更新中…") else text("Update now", "立即更新"))
+                }
+            }
+        }
         item{Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){OutlinedButton(onClick={confirmExit=true},enabled=!busy,modifier=Modifier.weight(1f)){Text(text("Discard","放弃"))};Button(onClick={model.saveProfile()},enabled=!busy&&p.name.isNotBlank()&&intervalValid,modifier=Modifier.weight(1f)){Text(text("Save and validate","保存并验证"))}}}
     }
     if(confirmExit)ConfirmDialog(text("Discard changes?","放弃修改？"),text("Your saved configuration will not be changed.","已保存的配置不会改变。"),{confirmExit=false}){confirmExit=false;model.discardProfile(onBack)}

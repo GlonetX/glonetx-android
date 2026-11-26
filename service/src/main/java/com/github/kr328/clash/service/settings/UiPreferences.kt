@@ -23,6 +23,7 @@ data class UiPreferences(
     val proxyLastGroup: String = "",
     val proxyDensity: String = "Standard",
     val proxyIconStyle: String = "None",
+    val proxyViewMode: String = "Grid",
     val connectionsSort: String = "Size",
     val connectionsSortReversed: Boolean = false,
     val connectionsGroupByProcess: Boolean = false,

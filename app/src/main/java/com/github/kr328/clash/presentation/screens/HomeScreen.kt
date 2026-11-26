@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.github.kr328.clash.core.model.TunnelState
 import com.github.kr328.clash.presentation.*
 import com.github.kr328.clash.service.settings.*
 import java.util.Locale
@@ -39,11 +41,10 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val widgets = listOf("traffic_total", "memory", "connections", "ip_info", "profile")
-@Composable private fun widgetTitle(key:String):String = when(key){"traffic_total"->text("Transferred","累计流量");"memory"->text("Memory","内存");"connections"->text("Connections","连接");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
+private val widgets = listOf("traffic_total", "connections", "ip_info", "profile")
+@Composable private fun widgetTitle(key:String):String = when(key){"traffic_total"->text("Transferred","累计流量");"connections"->text("Connections","连接");"ip_info"->text("Exit address","出口地址");else->text("Subscription","订阅")}
 @Composable private fun widgetIcon(key:String):ImageVector = when(key){
     "traffic_total"->Icons.Default.SwapVert
-    "memory"->Icons.Default.Memory
     "connections"->Icons.Default.Link
     "ip_info"->Icons.Default.Public
     else->Icons.Default.Description
@@ -55,7 +56,7 @@ private fun formatUptime(seconds:Long):String {
     return if(days>0)"${days}d $time" else time
 }
 
-@Composable fun HomeScreen(state: HomeState, preferences: UiPreferences, settings: SettingsSnapshot?, onToggle:()->Unit, onNavigate:(String)->Unit, onRefreshIp:()->Unit, onPreferences:((UiPreferences)->UiPreferences)->Unit, onHeaderVisible:(Boolean)->Unit) {
+@Composable fun HomeScreen(state: HomeState, preferences: UiPreferences, settings: SettingsSnapshot?, onToggle:()->Unit, onMode:(TunnelState.Mode)->Unit, onNavigate:(String)->Unit, onRefreshIp:()->Unit, onPreferences:((UiPreferences)->UiPreferences)->Unit, onHeaderVisible:(Boolean)->Unit) {
     var edit by rememberSaveable{mutableStateOf(false)}
     val listState = rememberLazyGridState()
     LaunchedEffect(listState.firstVisibleItemIndex) {
@@ -113,6 +114,32 @@ private fun formatUptime(seconds:Long):String {
                                 }
                                 Text(profileLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val next = when (state.mode) {
+                                        TunnelState.Mode.Rule -> TunnelState.Mode.Global
+                                        TunnelState.Mode.Global -> TunnelState.Mode.Direct
+                                        else -> TunnelState.Mode.Rule
+                                    }
+                                    onMode(next)
+                                    android.util.Log.d("GlonetXMode", "mode click $next")
+                                },
+                                enabled = !state.loading,
+                                modifier = Modifier.size(40.dp),
+                            ) {
+                                Icon(
+                                    when (state.mode) {
+                                        TunnelState.Mode.Rule -> Icons.Default.Route
+                                        TunnelState.Mode.Global -> Icons.Default.Public
+                                        else -> Icons.Default.Link
+                                    },
+                                    text(
+                                        "Routing mode: ${when (state.mode) { TunnelState.Mode.Rule -> "Rule"; TunnelState.Mode.Global -> "Global"; else -> "Direct" }}",
+                                        "路由模式：${when (state.mode) { TunnelState.Mode.Rule -> "规则"; TunnelState.Mode.Global -> "全局"; else -> "直连" }}",
+                                    ),
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
                             FilledIconButton(
                                 onClick={
                                     if (preferences.hapticFeedback) {
@@ -125,8 +152,8 @@ private fun formatUptime(seconds:Long):String {
                                     onToggle()
                                 },
                                 enabled=!state.loading,
-                                modifier=Modifier.size(64.dp).onGloballyPositioned { buttonCenter = it.positionInRoot() },
-                            ){Icon(Icons.Default.PowerSettingsNew,if(state.connected)text("Disconnect","断开")else text("Connect","连接"),Modifier.size(32.dp))}
+                                modifier=Modifier.size(52.dp).onGloballyPositioned { buttonCenter = it.positionInRoot() },
+                            ){Icon(Icons.Default.PowerSettingsNew,if(state.connected)text("Disconnect","断开")else text("Connect","连接"),Modifier.size(26.dp))}
                         }
                 if(settings?.trafficPolicy==TrafficPolicy.Paused) StatusBanner(Icons.Default.PauseCircleOutline,text("Traffic paused by your network policy","网络策略已暂停流量"),tint=MaterialTheme.colorScheme.error)
                 if(settings?.trafficPolicy==TrafficPolicy.Direct) StatusBanner(Icons.Default.Route,text("Direct connection policy is active","直连策略生效中"),tint=MaterialTheme.colorScheme.error)
@@ -155,7 +182,7 @@ private fun formatUptime(seconds:Long):String {
                 } else null,
                 background = if (key == "ip_info") {
                     {
-                        WorldMapBackground(
+                        RegionalMapBackground(
                             latitude = state.ip?.latitude,
                             longitude = state.ip?.longitude,
                             modifier = Modifier.matchParentSize(),
@@ -169,10 +196,6 @@ private fun formatUptime(seconds:Long):String {
                         MetricDetail(Icons.Default.Upload, text("Uploaded", "累计上传"), bytes(state.totalUpload), tint = MaterialTheme.colorScheme.tertiary)
                         MetricDetail(Icons.Default.Download, text("Downloaded", "累计下载"), bytes(state.totalDownload), tint = MaterialTheme.colorScheme.primary)
                     }
-                    "memory" -> {
-                        Text(if (state.connected) bytes(state.memory) else "—", style = MaterialTheme.typography.headlineSmall)
-                        Text(text("Clash memory", "Clash 内存占用"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
                     "connections" -> {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(if (state.connected) state.connections.toString() else "—", style = MaterialTheme.typography.headlineSmall)
@@ -180,13 +203,24 @@ private fun formatUptime(seconds:Long):String {
                         }
                     }
                     "profile" -> {
-                        Text(state.active?.name ?: text("No subscription selected", "尚未选择订阅"), style = MaterialTheme.typography.titleMedium)
-                        state.active?.let {
-                            MetricDetail(Icons.Default.CheckCircle, text("Status", "状态"), text("Active", "当前使用"), tint = MaterialTheme.colorScheme.tertiary)
+                        Text(state.active?.name ?: text("No subscription selected", "尚未选择订阅"), style = MaterialTheme.typography.titleSmall)
+                        state.active?.let { profile ->
+                            val remaining = (profile.total - profile.upload - profile.download).coerceAtLeast(0)
+                            val trafficProgress = if (profile.total > 0) {
+                                (remaining.toDouble() / profile.total).coerceIn(0.0, 1.0).toFloat()
+                            } else 0f
+                            MetricDetail(Icons.Default.DataUsage, text("Traffic left", "剩余流量"), if (profile.total > 0) bytes(remaining) else "—")
+                            if (profile.total > 0) {
+                                LinearProgressIndicator(
+                                    progress = { trafficProgress },
+                                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                                )
+                            }
+                            MetricDetail(Icons.Default.Event, text("Time left", "剩余时间"), formatRemainingTime(profile.expire))
                         }
                     }
                     "ip_info" -> {
-                        Text(state.ip?.ip ?: if (state.connected) text("Detecting…", "检测中…") else "—", style = MaterialTheme.typography.titleLarge)
+                        Text(state.ip?.ip?.let(::simplifyIpAddress) ?: if (state.connected) text("Detecting…", "检测中…") else "—", style = MaterialTheme.typography.titleLarge)
                         state.ip?.let {
                             Text(
                                 listOfNotNull(it.country, it.city).joinToString(" · "),
@@ -198,7 +232,6 @@ private fun formatUptime(seconds:Long):String {
                 }
             }
         }
-        item(span={GridItemSpan(maxLineSpan)}){Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){TextButton(onClick={onNavigate("logs")}){Text(text("Logs","日志"))};TextButton(onClick={onNavigate("help")}){Text(text("Help","帮助"))};TextButton(onClick={onNavigate("about")}){Text(text("About","关于"))}}}
     }
     if(edit) DashboardEditor(preferences,{edit=false},onPreferences)
 }
@@ -271,66 +304,50 @@ private fun DrawScope.drawFluidBlob(
 }
 
 @Composable
-private fun WorldMapBackground(
-    latitude: Double?,
-    longitude: Double?,
-    modifier: Modifier = Modifier,
-) {
-    val land = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
-    val accent = MaterialTheme.colorScheme.primary
-    Canvas(modifier) {
-        val continents = listOf(
-            listOf(0.04f to 0.18f, 0.11f to 0.10f, 0.22f to 0.12f, 0.28f to 0.20f, 0.25f to 0.31f, 0.19f to 0.36f, 0.17f to 0.48f, 0.12f to 0.42f, 0.07f to 0.34f),
-            listOf(0.20f to 0.47f, 0.26f to 0.50f, 0.30f to 0.60f, 0.28f to 0.75f, 0.24f to 0.90f, 0.20f to 0.82f, 0.18f to 0.65f),
-            listOf(0.45f to 0.20f, 0.52f to 0.16f, 0.57f to 0.20f, 0.56f to 0.30f, 0.50f to 0.32f, 0.46f to 0.27f),
-            listOf(0.46f to 0.34f, 0.55f to 0.32f, 0.60f to 0.42f, 0.58f to 0.58f, 0.52f to 0.72f, 0.47f to 0.62f, 0.44f to 0.48f),
-            listOf(0.56f to 0.16f, 0.68f to 0.10f, 0.82f to 0.14f, 0.90f to 0.24f, 0.86f to 0.38f, 0.76f to 0.42f, 0.68f to 0.35f, 0.60f to 0.38f, 0.55f to 0.28f),
-            listOf(0.80f to 0.62f, 0.88f to 0.60f, 0.92f to 0.68f, 0.88f to 0.78f, 0.80f to 0.76f, 0.78f to 0.68f),
-            listOf(0.30f to 0.08f, 0.36f to 0.06f, 0.38f to 0.14f, 0.33f to 0.18f),
-        )
-        continents.forEach { points ->
-            val path = Path()
-            points.forEachIndexed { index, (x, y) ->
-                val px = x * size.width
-                val py = y * size.height
-                if (index == 0) path.moveTo(px, py) else path.lineTo(px, py)
-            }
-            path.close()
-            drawPath(path, land)
-        }
-        if (latitude != null && longitude != null && latitude in -90.0..90.0 && longitude in -180.0..180.0) {
-            val x = ((longitude + 180.0) / 360.0).toFloat() * size.width
-            val y = ((90.0 - latitude) / 180.0).toFloat() * size.height
-            drawCircle(accent.copy(alpha = 0.18f), radius = 14.dp.toPx(), center = Offset(x, y))
-            drawCircle(accent, radius = 4.dp.toPx(), center = Offset(x, y))
-        }
-    }
-}
-
-@Composable
 private fun NetworkChartBackground(
     points: List<TrafficPoint>,
     modifier: Modifier = Modifier,
 ) {
-    val down = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
-    val up = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)
+    val down = MaterialTheme.colorScheme.primary.copy(alpha = 0.42f)
+    val up = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.32f)
+    val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
+    val fixedMaxRate = 5.0 * 1024 * 1024
     Canvas(modifier) {
         if (points.isEmpty()) return@Canvas
-        val maximum = points.maxOf { maxOf(it.upload, it.download) }.coerceAtLeast(1)
-        fun area(selector: (TrafficPoint) -> Long, color: Color) {
+        for (index in 0..4) {
+            val y = size.height * (1f - index / 4f)
+            drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+        }
+        fun smoothPath(selector: (TrafficPoint) -> Long): Path {
             val path = Path()
-            points.forEachIndexed { index, point ->
+            val coordinates = points.mapIndexed { index, point ->
                 val x = index.toFloat() / (points.size - 1).coerceAtLeast(1) * size.width
-                val y = size.height - selector(point).toFloat() / maximum * size.height
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                val rate = selector(point).toDouble().coerceIn(0.0, fixedMaxRate)
+                val y = size.height - (rate / fixedMaxRate).toFloat() * size.height
+                Offset(x, y)
             }
+            path.moveTo(coordinates.first().x, coordinates.first().y)
+            for (index in 1 until coordinates.lastIndex) {
+                val current = coordinates[index]
+                val next = coordinates[index + 1]
+                val midX = (current.x + next.x) / 2f
+                val midY = (current.y + next.y) / 2f
+                path.quadraticTo(current.x, current.y, midX, midY)
+            }
+            path.lineTo(coordinates.last().x, coordinates.last().y)
+            return path
+        }
+        fun area(selector: (TrafficPoint) -> Long, color: Color) {
+            val path = smoothPath(selector)
             path.lineTo(size.width, size.height)
             path.lineTo(0f, size.height)
             path.close()
-            drawPath(path, color)
+            drawPath(path, color.copy(alpha = color.alpha * 0.35f))
         }
         area({ it.download }, down)
         area({ it.upload }, up)
+        drawPath(smoothPath({ it.download }), down, style = Stroke(1.5.dp.toPx()))
+        drawPath(smoothPath({ it.upload }), up, style = Stroke(1.5.dp.toPx()))
     }
 }
 
