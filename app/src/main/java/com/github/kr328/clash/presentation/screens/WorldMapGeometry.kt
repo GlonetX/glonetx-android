@@ -108,12 +108,14 @@ internal object WorldMapGeometry {
     fun worldCrop(
         imageWidth: Float,
         imageHeight: Float,
-        viewportAspect: Float,
     ): MapCrop {
         val bounds = contentBounds(imageWidth, imageHeight)
-        val aspect = safeAspect(viewportAspect, bounds)
-        val center = MapPoint((bounds.left + bounds.right) / 2f, (bounds.top + bounds.bottom) / 2f)
-        return cropAround(center, bounds, aspect, bounds.width, bounds.height)
+        return MapCrop(
+            left = bounds.left,
+            top = bounds.top,
+            width = bounds.width,
+            height = bounds.height,
+        )
     }
 
     private fun cropAround(

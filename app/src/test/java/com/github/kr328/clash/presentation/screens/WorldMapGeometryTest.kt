@@ -83,17 +83,13 @@ class WorldMapGeometryTest {
     }
 
     @Test
-    fun worldFallbackAlsoPreservesAspectRatio() {
+    fun worldCropContainsTheEntireMap() {
+        val crop = WorldMapGeometry.worldCrop(imageWidth, imageHeight)
         val bounds = WorldMapGeometry.contentBounds(imageWidth, imageHeight)
-        val wideCrop = WorldMapGeometry.worldCrop(imageWidth, imageHeight, viewportAspect = 2.3f)
-        val tallCrop = WorldMapGeometry.worldCrop(imageWidth, imageHeight, viewportAspect = 0.8f)
 
-        assertEquals(2.3f, wideCrop.width / wideCrop.height, 0.001f)
-        assertEquals(bounds.width, wideCrop.width, 0.02f)
-        assertTrue(wideCrop.height < bounds.height)
-
-        assertEquals(0.8f, tallCrop.width / tallCrop.height, 0.001f)
-        assertEquals(bounds.height, tallCrop.height, 0.02f)
-        assertTrue(tallCrop.width < bounds.width)
+        assertEquals(bounds.left, crop.left, 0.001f)
+        assertEquals(bounds.top, crop.top, 0.001f)
+        assertEquals(bounds.width, crop.width, 0.001f)
+        assertEquals(bounds.height, crop.height, 0.001f)
     }
 }

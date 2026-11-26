@@ -16,15 +16,16 @@ import com.github.kr328.clash.R
 /**
  * Draws the world map as a subdued card background.
  *
- * When a valid location is available, the map is cropped to a state/region
- * sized view around that coordinate and a marker is drawn at the projected
- * position. Without a location it falls back to a centered world view.
+ * The default view fits the entire world inside the card without cropping or
+ * stretching. Regional mode is retained for future use and crops around a
+ * valid coordinate when enabled explicitly.
  */
 @Composable
 fun RegionalMapBackground(
     latitude: Double?,
     longitude: Double?,
     modifier: Modifier = Modifier,
+    regional: Boolean = false,
 ) {
     val map = ImageBitmap.imageResource(R.drawable.world_map)
     val accent = MaterialTheme.colorScheme.primary
@@ -41,19 +42,24 @@ fun RegionalMapBackground(
             imageWidth = imageWidth,
             imageHeight = imageHeight,
         )
-        val crop = if (point != null) {
+        val crop = if (point != null && regional) {
             WorldMapGeometry.regionalCrop(point, imageWidth, imageHeight, viewportAspect)
         } else {
-            WorldMapGeometry.worldCrop(imageWidth, imageHeight, viewportAspect)
+            WorldMapGeometry.worldCrop(imageWidth, imageHeight)
         }
 
-        // Both axes use the same scale, so the map is never stretched. Using
-        // a float transform also keeps the marker aligned with the crop;
-        // integer srcOffset/srcSize rounding can introduce a visible drift.
-        val scale = size.width / crop.width
+        // Fit the complete crop inside the card. Global mode therefore shows
+        // the whole world with letterboxing instead of cropping the poles.
+        val scale = minOf(size.width / crop.width, size.height / crop.height)
+        val drawLeft = (size.width - crop.width * scale) / 2f
+        val drawTop = (size.height - crop.height * scale) / 2f
+        val offset = Offset(
+            x = drawLeft - crop.left * scale,
+            y = drawTop - crop.top * scale,
+        )
         clipRect {
             withTransform({
-                translate(left = -crop.left * scale, top = -crop.top * scale)
+                translate(left = offset.x, top = offset.y)
                 scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
             }) {
                 drawImage(image = map, alpha = 0.34f)
@@ -62,8 +68,8 @@ fun RegionalMapBackground(
 
         if (point != null) {
             val marker = Offset(
-                x = (point.x - crop.left) * scale,
-                y = (point.y - crop.top) * scale,
+                x = point.x * scale + offset.x,
+                y = point.y * scale + offset.y,
             )
             drawCircle(
                 color = accent.copy(alpha = 0.22f),
